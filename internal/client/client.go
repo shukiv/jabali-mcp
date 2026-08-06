@@ -26,10 +26,10 @@ import (
 
 // Config is a single panel's connection settings.
 type Config struct {
-	Name    string `json:"name"`    // logical panel name (fleet mode); "default" if unset
-	BaseURL string `json:"url"`     // e.g. https://panel.example:8443/api/v1
-	Token   string `json:"token"`   // jat_… bearer token
-	CAFile  string `json:"ca_file"` // optional PEM bundle to trust (self-hosted panel CA)
+	Name    string `json:"name"`              // logical panel name (fleet mode); "default" if unset
+	BaseURL string `json:"url"`               // e.g. https://panel.example:8443/api/v1
+	Token   string `json:"token"`             // jat_… bearer token
+	CAFile  string `json:"ca_file,omitempty"` // optional PEM bundle to trust (self-hosted panel CA)
 }
 
 // Client talks to one panel.

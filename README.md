@@ -79,6 +79,27 @@ smoke test returns immediately).
 
 ## Set up
 
+### Quickest: the guided walkthrough
+
+```sh
+jabali-mcp init
+```
+
+It prompts for each panel (name, URL, token), **verifies the token against the
+panel**, and writes a `0600` `panels.json` to your config dir
+(`~/.config/jabali-mcp/panels.json`). Add as many panels as you like — one for a
+single instance, several for a fleet. Because that path is the default, the
+server finds it with **no env vars**, so registering with a client is just:
+
+```sh
+claude mcp add jabali -- jabali-mcp        # no --env needed after init
+```
+
+Re-run `init` any time to reconfigure. The manual steps below are the same thing
+by hand.
+
+### Manual
+
 **1. Mint an API token.** In the panel, go to the tenant shell → **API Tokens**
 and create one. The plaintext `jat_…` is shown once — copy it. Use a **non-admin**
 (tenant) token so the server is confined to that one account.
@@ -206,8 +227,12 @@ everything to its user. Nothing to install client-side beyond an SSH key.
 
 ### Fleet (multiple panels)
 
-Set `JABALI_PANELS_FILE` to a JSON array — it overrides the single-panel vars,
-and every tool then accepts an optional `panel` argument to target one:
+The easiest path is `jabali-mcp init` — add several panels when it asks "Add
+another panel?". It writes them to the default `panels.json`, which the server
+loads automatically.
+
+Equivalently, point `JABALI_PANELS_FILE` at a JSON array (this overrides the
+single-panel vars), or write that array yourself:
 
 ```json
 [
@@ -215,6 +240,11 @@ and every tool then accepts an optional `panel` argument to target one:
   { "name": "prod-b", "url": "https://b:8443/api/v1", "token": "jat_…" }
 ]
 ```
+
+Config resolution order: `JABALI_PANELS_FILE` → single-panel env
+(`JABALI_PANEL_URL` + `JABALI_API_TOKEN`) → the default `panels.json`. In a
+fleet, every tool takes an optional `panel` argument to pick one; omit it for the
+first (default) panel.
 
 ## Auth model — inherits the panel's tenant isolation
 

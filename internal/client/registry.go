@@ -4,8 +4,35 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 )
+
+// DefaultConfigPath is where `jabali-mcp init` writes panels.json and where the
+// server looks when no config is given by the environment. It respects
+// XDG_CONFIG_HOME via os.UserConfigDir (e.g. ~/.config/jabali-mcp/panels.json).
+func DefaultConfigPath() string {
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(dir, "jabali-mcp", "panels.json")
+}
+
+// SavePanels writes the panels file (0600) creating its directory (0700).
+func SavePanels(path string, cfgs []Config) error {
+	if path == "" {
+		return fmt.Errorf("no output path")
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return fmt.Errorf("create config dir: %w", err)
+	}
+	b, err := json.MarshalIndent(cfgs, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, append(b, '\n'), 0o600)
+}
 
 // Registry holds one or more panel clients and a default selection.
 //
@@ -75,11 +102,31 @@ func LoadOptions() (Options, error) {
 		return opts, nil
 	}
 
+	// No explicit config in the env: if there's no single-panel URL either, fall
+	// back to the default panels.json written by `jabali-mcp init`, when present.
+	// This lets a configured client be just `command: jabali-mcp`, no env.
+	if os.Getenv("JABALI_PANEL_URL") == "" {
+		if p := DefaultConfigPath(); p != "" {
+			if _, err := os.Stat(p); err == nil {
+				reg, err := loadPanelsFile(p)
+				if err != nil {
+					return opts, err
+				}
+				opts.Registry = reg
+				return opts, nil
+			}
+		}
+	}
+
 	cfg := Config{
 		Name:    os.Getenv("JABALI_PANEL_NAME"),
 		BaseURL: os.Getenv("JABALI_PANEL_URL"),
 		Token:   os.Getenv("JABALI_API_TOKEN"),
 		CAFile:  os.Getenv("JABALI_CA_FILE"),
+	}
+	if cfg.BaseURL == "" {
+		return opts, fmt.Errorf("no panel configured — run `jabali-mcp init` to set one up, " +
+			"or set JABALI_PANEL_URL + JABALI_API_TOKEN")
 	}
 	c, err := New(cfg)
 	if err != nil {

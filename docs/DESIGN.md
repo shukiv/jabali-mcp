@@ -73,6 +73,11 @@ Jabali Panel REST API  ──►  ownership check (claims.UserID == resource.Use
   (The `jsonschema` struct tag is description-only in the SDK, so the constraints
   are enforced in the handler rather than encoded in the schema.)
 
+- `jabali-mcp init`: interactive setup wizard that verifies each token against
+  the panel and writes a `0600` `panels.json` to the default config dir, which
+  the server auto-discovers (no env needed after setup). Config resolution:
+  `JABALI_PANELS_FILE` → single-panel env → default `panels.json`.
+
 ## Next
 
 - Admin tools (`/admin/*`) behind their own explicit opt-in flag.

@@ -31,10 +31,45 @@ import (
 var version = "0.1.0-dev"
 
 func main() {
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "init":
+			if err := runInit(os.Args[2:]); err != nil {
+				fmt.Fprintf(os.Stderr, "jabali-mcp init: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		case "-h", "--help", "help":
+			usage()
+			return
+		case "-v", "--version", "version":
+			fmt.Println("jabali-mcp", version)
+			return
+		default:
+			fmt.Fprintf(os.Stderr, "jabali-mcp: unknown command %q\n\n", os.Args[1])
+			usage()
+			os.Exit(2)
+		}
+	}
 	if err := run(); err != nil {
 		fmt.Fprintf(os.Stderr, "jabali-mcp: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+func usage() {
+	fmt.Fprint(os.Stderr, `jabali-mcp — MCP server for Jabali Panel
+
+Usage:
+  jabali-mcp            run the MCP server over stdio (for an MCP client)
+  jabali-mcp init       interactive setup: configure panels, write config
+  jabali-mcp help       show this help
+  jabali-mcp version    print the version
+
+Configuration is read from the environment (JABALI_PANEL_URL / JABALI_API_TOKEN,
+or JABALI_PANELS_FILE for a fleet), or from the panels.json that 'init' writes.
+See the README for details and per-client registration.
+`)
 }
 
 func run() error {
