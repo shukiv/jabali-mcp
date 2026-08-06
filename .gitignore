@@ -1,0 +1,25 @@
+# Binaries
+/jabali-mcp
+/bin/
+*.exe
+*.test
+*.out
+
+# Go
+/vendor/
+go.work
+go.work.sum
+
+# Secrets / local config — never commit
+*.env
+.env
+config.local.*
+*token*.json
+*.pem
+*.key
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
