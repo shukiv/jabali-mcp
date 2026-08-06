@@ -30,6 +30,9 @@ This fronts a hosting control plane, so mutation is fenced in three layers:
    step (the guard against prompt-injected tool calls).
 3. **Tool hints.** Read tools carry `readOnlyHint`; destructive tools carry
    `destructiveHint` so MCP clients can surface the risk.
+4. **Dry-run.** Any write tool accepts `dry_run: true` to return the exact
+   request it *would* send without acting; `JABALI_MCP_DRY_RUN=1` forces that on
+   every write globally — a safe-preview posture for a whole session.
 
 TLS verification is always on. To trust a self-hosted panel's private CA, point
 `JABALI_CA_FILE` at its bundle — that *adds* the CA, it never disables
@@ -46,6 +49,7 @@ Single panel:
 | `JABALI_PANEL_NAME` | logical name (optional; default `default`) |
 | `JABALI_CA_FILE` | PEM bundle to trust a self-hosted CA (optional) |
 | `JABALI_MCP_ALLOW_WRITE` | `1` to enable mutating tools (default: read-only) |
+| `JABALI_MCP_DRY_RUN` | `1` to force every write tool to preview instead of act |
 
 Fleet (multiple panels): set `JABALI_PANELS_FILE` to a JSON array — it overrides
 the single-panel vars, and tools accept an optional `panel` argument to target
@@ -116,8 +120,9 @@ docs/DESIGN.md      architecture, security model, roadmap
   confirm-gated.
 - **M3 — fleet** ✅ multi-panel registry + `panel` tool argument.
 - **Generator** ✅ tools generated from the spec + curation, golden-tested.
-- **Next:** per-tool input validation against the OpenAPI request schemas; a
-  dry-run mode for write tools; admin tools behind their own opt-in.
+- **Dry-run** ✅ per-call `dry_run` + global `JABALI_MCP_DRY_RUN`.
+- **Next:** per-tool input validation against the OpenAPI request schemas; admin
+  tools behind their own opt-in.
 
 ## License
 

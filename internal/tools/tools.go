@@ -17,6 +17,7 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -26,8 +27,13 @@ import (
 	"github.com/shukiv/jabali-mcp/internal/client"
 )
 
+// globalDryRun forces every write tool to preview instead of act. Set once by
+// Register at startup, read-only thereafter.
+var globalDryRun bool
+
 // Register adds every enabled tool to the server.
 func Register(s *mcp.Server, opts client.Options) {
+	globalDryRun = opts.DryRun
 	reg := opts.Registry
 	registerRead(s, reg)
 	if opts.AllowWrite {
@@ -54,6 +60,15 @@ func (c confirmArg) confirmed() bool { return c.Confirm }
 
 type confirmer interface{ confirmed() bool }
 
+// dryRunArg is embedded in every write tool input.
+type dryRunArg struct {
+	DryRun bool `json:"dry_run,omitempty" jsonschema:"if true, return the request that would be sent without performing it"`
+}
+
+func (d dryRunArg) isDryRun() bool { return d.DryRun }
+
+type dryRunner interface{ isDryRun() bool }
+
 // reqSpec is one upstream REST call.
 type reqSpec struct {
 	method string
@@ -78,9 +93,18 @@ func runRead[In any](ctx context.Context, reg *client.Registry, in In, spec reqS
 	return exec(ctx, c, spec)
 }
 
-// runWrite executes a mutating request. When gated is true the input must carry
-// confirm=true; otherwise the call returns a preview instead of acting.
+// runWrite executes a mutating request. Order:
+//  1. Dry-run (global flag or per-call dry_run) previews the request and stops.
+//  2. A gated (destructive) tool requires confirm=true, else it previews.
+//  3. Otherwise the request is sent.
 func runWrite[In any](ctx context.Context, reg *client.Registry, in In, gated bool, preview string, spec reqSpec) (*mcp.CallToolResult, any, error) {
+	dry := globalDryRun
+	if dr, ok := any(in).(dryRunner); ok && dr.isDryRun() {
+		dry = true
+	}
+	if dry {
+		return textResult("DRY RUN — no request was sent. Would send:\n" + describeReq(spec)), nil, nil
+	}
 	if gated {
 		cf, ok := any(in).(confirmer)
 		if !ok || !cf.confirmed() {
@@ -93,6 +117,17 @@ func runWrite[In any](ctx context.Context, reg *client.Registry, in In, gated bo
 		return errResult(err.Error()), nil, nil
 	}
 	return exec(ctx, c, spec)
+}
+
+// describeReq renders a request for a dry-run preview.
+func describeReq(spec reqSpec) string {
+	s := spec.method + " " + spec.path
+	if spec.body != nil {
+		if b, err := json.Marshal(spec.body); err == nil {
+			s += "\nbody: " + string(b)
+		}
+	}
+	return s
 }
 
 func exec(ctx context.Context, c *client.Client, spec reqSpec) (*mcp.CallToolResult, any, error) {

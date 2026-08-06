@@ -133,6 +133,7 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 	{
 		type CreateDomainIn struct {
 			panelArg
+			dryRunArg
 			Name string `json:"name" jsonschema:"e.g. example.com"`
 		}
 		mcp.AddTool(s, &mcp.Tool{Name: "create_domain", Description: "Add a domain", Annotations: additiveAnno()},
@@ -146,6 +147,7 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 	{
 		type CreateDnsRecordIn struct {
 			panelArg
+			dryRunArg
 			DomainId string `json:"domain_id" jsonschema:"the domain's ULID"`
 			Content  string `json:"content" jsonschema:"e.g. 203.0.113.5"`
 			Name     string `json:"name" jsonschema:"e.g. vpn"`
@@ -172,6 +174,7 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 	{
 		type UpdateDnsRecordIn struct {
 			panelArg
+			dryRunArg
 			RecordId  string `json:"record_id" jsonschema:"the record's ULID"`
 			Content   string `json:"content,omitempty" jsonschema:"e.g. 203.0.113.99"`
 			IsEnabled *bool  `json:"is_enabled,omitempty" jsonschema:"is enabled"`
@@ -200,6 +203,7 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 	{
 		type CreateMailboxIn struct {
 			panelArg
+			dryRunArg
 			DomainId  string `json:"domain_id" jsonschema:"the domain's ULID"`
 			LocalPart string `json:"local_part" jsonschema:"e.g. alice"`
 			Password  string `json:"password" jsonschema:"password"`
@@ -218,6 +222,7 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 	{
 		type CreateForwarderIn struct {
 			panelArg
+			dryRunArg
 			DomainId string `json:"domain_id" jsonschema:"the domain's ULID"`
 			Dest     string `json:"dest" jsonschema:"e.g. alice@example.com"`
 			Source   string `json:"source" jsonschema:"e.g. sales@example.com"`
@@ -234,6 +239,7 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 	{
 		type CreateBackupIn struct {
 			panelArg
+			dryRunArg
 		}
 		mcp.AddTool(s, &mcp.Tool{Name: "create_backup", Description: "Trigger an on-demand backup", Annotations: additiveAnno()},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in CreateBackupIn) (*mcp.CallToolResult, any, error) {
@@ -244,6 +250,7 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 	{
 		type DeleteDomainIn struct {
 			panelArg
+			dryRunArg
 			confirmArg
 			DomainId string `json:"domain_id" jsonschema:"the domain's ULID"`
 		}
@@ -257,6 +264,7 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 	{
 		type DeleteDnsRecordIn struct {
 			panelArg
+			dryRunArg
 			confirmArg
 			RecordId string `json:"record_id" jsonschema:"the record's ULID"`
 		}
@@ -270,6 +278,7 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 	{
 		type DeleteMailboxIn struct {
 			panelArg
+			dryRunArg
 			confirmArg
 			MailboxId string `json:"mailbox_id" jsonschema:"the mailbox's ULID"`
 		}
@@ -283,6 +292,7 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 	{
 		type SetMailboxPasswordIn struct {
 			panelArg
+			dryRunArg
 			confirmArg
 			MailboxId string `json:"mailbox_id" jsonschema:"the mailbox's ULID"`
 			Password  string `json:"password" jsonschema:"password"`
@@ -299,6 +309,7 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 	{
 		type RestoreBackupIn struct {
 			panelArg
+			dryRunArg
 			confirmArg
 			BackupId string `json:"backup_id" jsonschema:"the backup's ULID"`
 		}

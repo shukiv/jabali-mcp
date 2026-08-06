@@ -333,6 +333,9 @@ func emitTool(b *strings.Builder, m toolModel) {
 	method := "http.Method" + camel(strings.ToLower(m.Method))
 
 	fmt.Fprintf(b, "\t{\n\t\ttype %s struct {\n\t\t\tpanelArg\n", typeName)
+	if m.Group == "write" {
+		b.WriteString("\t\t\tdryRunArg\n")
+	}
 	if m.Destructive {
 		b.WriteString("\t\t\tconfirmArg\n")
 	}

@@ -56,6 +56,9 @@ func run() error {
 	if opts.AllowWrite {
 		mode = "read-write (mutations enabled; destructive ops still require confirm=true)"
 	}
+	if opts.DryRun {
+		mode += " [DRY RUN: writes preview only]"
+	}
 	fmt.Fprintf(os.Stderr, "jabali-mcp %s — %s; panels: %v\n", version, mode, opts.Registry.Names())
 
 	return srv.Run(context.Background(), &mcp.StdioTransport{})

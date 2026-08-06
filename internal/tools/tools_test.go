@@ -183,6 +183,59 @@ func TestDestructiveToolRequiresConfirm(t *testing.T) {
 	}
 }
 
+func TestDryRunDoesNotHitPanel(t *testing.T) {
+	fp := &fakePanel{}
+	ts := httptest.NewServer(fp.handler())
+	defer ts.Close()
+
+	cs := connect(t, newOpts(t, ts.URL, true))
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Per-call dry_run on an additive tool: previews, never sends.
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "create_domain",
+		Arguments: map[string]any{"name": "example.com", "dry_run": true},
+	})
+	if err != nil {
+		t.Fatalf("call create_domain dry-run: %v", err)
+	}
+	text := firstText(res)
+	if !strings.Contains(text, "DRY RUN") || !strings.Contains(text, "POST /domains") {
+		t.Errorf("expected a dry-run preview naming POST /domains, got %q", text)
+	}
+	if n := len(fp.methods()); n != 0 {
+		t.Fatalf("dry-run must not hit the panel, got %d calls", n)
+	}
+}
+
+func TestGlobalDryRunForcesPreview(t *testing.T) {
+	fp := &fakePanel{}
+	ts := httptest.NewServer(fp.handler())
+	defer ts.Close()
+
+	opts := newOpts(t, ts.URL, true)
+	opts.DryRun = true
+	cs := connect(t, opts)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Even a confirmed destructive call is only previewed under global dry-run.
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "delete_domain",
+		Arguments: map[string]any{"domain_id": "01ABC", "confirm": true},
+	})
+	if err != nil {
+		t.Fatalf("call delete_domain: %v", err)
+	}
+	if !strings.Contains(firstText(res), "DRY RUN") {
+		t.Errorf("global dry-run should preview even a confirmed delete, got %q", firstText(res))
+	}
+	if n := len(fp.methods()); n != 0 {
+		t.Fatalf("global dry-run must not hit the panel, got %d calls", n)
+	}
+}
+
 func firstText(res *mcp.CallToolResult) string {
 	for _, c := range res.Content {
 		if tc, ok := c.(*mcp.TextContent); ok {
