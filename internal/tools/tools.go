@@ -11,6 +11,8 @@
 // as its owning user and the panel enforces ownership server-side, so a tenant
 // token can only reach that tenant's resources regardless of what a tool asks
 // for.
+//go:generate go run ../../cmd/gen-tools -spec ../../openapi/openapi.yaml -curation ../../openapi/tools.yaml -out generated.go
+
 package tools
 
 import (

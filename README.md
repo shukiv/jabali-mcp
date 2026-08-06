@@ -6,9 +6,8 @@ so an LLM agent can drive panel operations — domains, DNS, mail, applications,
 databases, backups — through natural language.
 
 > **Status:** working MVP. Read tools + gated write/destructive tools + fleet
-> registry are implemented and tested against an in-memory MCP round-trip. The
-> tool set is currently hand-written from the panel's OpenAPI spec; generating
-> it from the spec is the next step (see `internal/gen`).
+> registry, and the tool set is **generated from the panel's OpenAPI spec** — a
+> golden test fails if the checked-in code drifts from the spec.
 
 ## Auth model — inherits the panel's tenant isolation
 
@@ -59,6 +58,22 @@ one:
 ]
 ```
 
+## Tool generation
+
+Tools are generated, not hand-written, so the surface can't drift from the API:
+
+- `openapi/openapi.yaml` — vendored copy of the panel's spec.
+- `openapi/tools.yaml` — curation: which operations are exposed, their tool
+  names, `read`/`write` group, and `destructive`/`paginated` flags. An operation
+  absent here is not exposed (that keeps `admin/*` and `nic/update` out).
+- `internal/gen` joins the two and emits `internal/tools/generated.go`; run it
+  with `make gen` or `go generate ./...`.
+- A curation entry naming an operation the spec lacks is a hard error (drift
+  guard), and `TestGeneratedIsUpToDate` fails if the committed file is stale.
+
+To refresh after the panel API changes: copy the new `openapi.yaml` in, add or
+adjust `tools.yaml`, run `make gen`, review the diff.
+
 ## Tools
 
 **Read (always on):** `list_domains`, `get_domain`, `list_dns_records`,
@@ -86,9 +101,11 @@ Register it with an MCP client (e.g. Claude) as a stdio server running the
 
 ```
 cmd/jabali-mcp/     entry point (stdio MCP server)
+cmd/gen-tools/      CLI wrapper over internal/gen
 internal/client/    Bearer-token HTTP client + fleet registry
-internal/tools/     read.go + write.go — one tool per REST operation
-internal/gen/       (planned) generate tool defs from openapi.yaml
+internal/tools/     tools.go (helpers + gate) + generated.go (the tools)
+internal/gen/       openapi.yaml + tools.yaml -> generated.go
+openapi/            vendored spec + curation
 docs/DESIGN.md      architecture, security model, roadmap
 ```
 
@@ -98,8 +115,9 @@ docs/DESIGN.md      architecture, security model, roadmap
 - **M2 — gated mutations** ✅ write tools behind an opt-in flag; destructive ops
   confirm-gated.
 - **M3 — fleet** ✅ multi-panel registry + `panel` tool argument.
-- **Next:** generate the tool set from `docs/api/openapi.yaml`; add per-tool
-  input-schema validation and a dry-run mode.
+- **Generator** ✅ tools generated from the spec + curation, golden-tested.
+- **Next:** per-tool input validation against the OpenAPI request schemas; a
+  dry-run mode for write tools; admin tools behind their own opt-in.
 
 ## License
 

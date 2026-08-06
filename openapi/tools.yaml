@@ -1,0 +1,40 @@
+# Curation: which OpenAPI operations are exposed as MCP tools, and their identity.
+#
+# This is the allow-list. An operation absent here is NOT exposed (that is how
+# admin/* and nic/update stay out). The generator (cmd/gen-tools) joins each
+# entry with the operation in openapi/openapi.yaml and fails if an entry names
+# an operation the spec does not have — that is the drift/coverage guard.
+#
+# Fields:
+#   op          "<METHOD> <path>" — must match a path+method in openapi.yaml
+#   name        the MCP tool name
+#   group       read | write   (write tools register only with JABALI_MCP_ALLOW_WRITE)
+#   destructive true           adds a confirm=true gate (delete / overwrite / credential change)
+#   paginated   true           adds page/page_size/q query args (list endpoints)
+
+tools:
+  # --- Read ---
+  - { op: "GET /domains",                    name: list_domains,      group: read, paginated: true }
+  - { op: "GET /domains/{id}",               name: get_domain,        group: read }
+  - { op: "GET /domains/{id}/dns/records",   name: list_dns_records,  group: read }
+  - { op: "GET /domains/{id}/mailboxes",     name: list_mailboxes,    group: read }
+  - { op: "GET /domains/{id}/forwarders",    name: list_forwarders,   group: read }
+  - { op: "GET /applications",               name: list_applications, group: read, paginated: true }
+  - { op: "GET /databases",                  name: list_databases,    group: read, paginated: true }
+  - { op: "GET /me/backups",                 name: list_backups,      group: read, paginated: true }
+  - { op: "GET /me/api-tokens",              name: list_api_tokens,   group: read, paginated: true }
+
+  # --- Write (additive) ---
+  - { op: "POST /domains",                   name: create_domain,     group: write }
+  - { op: "POST /domains/{id}/dns/records",  name: create_dns_record, group: write }
+  - { op: "PATCH /dns/records/{id}",         name: update_dns_record, group: write }
+  - { op: "POST /domains/{id}/mailboxes",    name: create_mailbox,    group: write }
+  - { op: "POST /domains/{id}/forwarders",   name: create_forwarder,  group: write }
+  - { op: "POST /me/backups",                name: create_backup,     group: write }
+
+  # --- Write (destructive; confirm-gated) ---
+  - { op: "DELETE /domains/{id}",            name: delete_domain,        group: write, destructive: true }
+  - { op: "DELETE /dns/records/{id}",        name: delete_dns_record,    group: write, destructive: true }
+  - { op: "DELETE /mailboxes/{id}",          name: delete_mailbox,       group: write, destructive: true }
+  - { op: "PUT /mailboxes/{id}/password",    name: set_mailbox_password, group: write, destructive: true }
+  - { op: "POST /me/backups/{id}/restore",   name: restore_backup,       group: write, destructive: true }
