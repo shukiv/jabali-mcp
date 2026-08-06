@@ -1,59 +1,134 @@
 # jabali-mcp
 
-A [Model Context Protocol](https://modelcontextprotocol.io) server that exposes
-the [Jabali Panel](https://github.com/shukiv/jabali-panel) REST API as MCP tools,
-so an LLM agent can drive panel operations — domains, DNS, mail, applications,
-databases, backups — through natural language.
+**A [Model Context Protocol](https://modelcontextprotocol.io) server for [Jabali Panel](https://github.com/shukiv/jabali-panel).**
 
-> **Status:** working MVP. Read tools + gated write/destructive tools + fleet
-> registry, and the tool set is **generated from the panel's OpenAPI spec** — a
-> golden test fails if the checked-in code drifts from the spec.
+<p>
+  <a href="#install">Install</a>
+  &nbsp;|&nbsp;
+  <a href="#set-up">Set up</a>
+  &nbsp;|&nbsp;
+  <a href="#tools">Tools</a>
+  &nbsp;|&nbsp;
+  <a href="#safety">Safety</a>
+  &nbsp;|&nbsp;
+  <a href="#tool-generation">Generation</a>
+</p>
 
-## Auth model — inherits the panel's tenant isolation
+<p>
+  <img src="https://img.shields.io/badge/status-working_MVP-f59e0b" alt="Working MVP">
+  <img src="https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&logoColor=white" alt="Go 1.25">
+  <img src="https://img.shields.io/badge/MCP-stdio-6E56CF" alt="MCP stdio">
+  <img src="https://img.shields.io/badge/License-MIT-blue" alt="MIT">
+</p>
 
-Tools authenticate with a **per-user Bearer token** (`jat_…`, minted in the
-panel under *API Tokens*). The token acts as its owning user and the panel
-enforces ownership on every endpoint, so the MCP server can only ever reach the
-resources that token's user owns — a tenant token is confined to that tenant.
-Use a **non-admin** token to keep the blast radius to one account.
+Lets an AI assistant drive panel operations — domains, DNS, mail, applications,
+databases, backups — through natural language. It's a thin, generated wrapper
+over the panel's existing REST API: it reimplements no auth, validation, or
+scoping, it rides them.
 
-## Safety
+> **Status:** working MVP. Read tools + gated write/destructive tools + a fleet
+> registry, generated from the panel's OpenAPI spec (a golden test fails if the
+> checked-in code drifts from the spec).
 
-This fronts a hosting control plane, so mutation is fenced in three layers:
+## Install
 
-1. **Read-only by default.** Only `read:*`-style tools are registered unless
-   `JABALI_MCP_ALLOW_WRITE=1` is set.
-2. **Destructive tools require `confirm: true`.** `delete_domain`,
-   `delete_dns_record`, `delete_mailbox`, `set_mailbox_password`, and
-   `restore_backup` return a preview and do nothing on the first call; they act
-   only when re-called with `confirm: true`. A model cannot destroy state in one
-   step (the guard against prompt-injected tool calls).
-3. **Tool hints.** Read tools carry `readOnlyHint`; destructive tools carry
-   `destructiveHint` so MCP clients can surface the risk.
-4. **Dry-run.** Any write tool accepts `dry_run: true` to return the exact
-   request it *would* send without acting; `JABALI_MCP_DRY_RUN=1` forces that on
-   every write globally — a safe-preview posture for a whole session.
+**Prerequisites:** Go 1.25+ and a reachable Jabali Panel with an API token
+(see [Set up](#set-up)). The server speaks MCP over stdio — an MCP client
+(Claude Code, Claude Desktop, …) launches it; you don't run it as a daemon.
 
-TLS verification is always on. To trust a self-hosted panel's private CA, point
-`JABALI_CA_FILE` at its bundle — that *adds* the CA, it never disables
-verification.
+### From source (recommended)
 
-## Configuration (environment)
+The repo is private, so clone over SSH and build:
 
-Single panel:
+```sh
+git clone git@github.com:shukiv/jabali-mcp.git
+cd jabali-mcp
+make build            # -> ./jabali-mcp
+```
 
-| Variable | Meaning |
-|---|---|
-| `JABALI_PANEL_URL` | e.g. `https://panel.example:8443/api/v1` |
-| `JABALI_API_TOKEN` | `jat_…` bearer token |
-| `JABALI_PANEL_NAME` | logical name (optional; default `default`) |
-| `JABALI_CA_FILE` | PEM bundle to trust a self-hosted CA (optional) |
-| `JABALI_MCP_ALLOW_WRITE` | `1` to enable mutating tools (default: read-only) |
-| `JABALI_MCP_DRY_RUN` | `1` to force every write tool to preview instead of act |
+`make build` stamps the version from `git describe`. Move the binary onto your
+`PATH` if you like:
 
-Fleet (multiple panels): set `JABALI_PANELS_FILE` to a JSON array — it overrides
-the single-panel vars, and tools accept an optional `panel` argument to target
-one:
+```sh
+sudo install -m 0755 jabali-mcp /usr/local/bin/jabali-mcp
+```
+
+### With `go install`
+
+```sh
+# private repo: tell the Go toolchain not to use the public proxy/sumdb,
+# and make sure git can auth to github (SSH or a token).
+export GOPRIVATE=github.com/shukiv/*
+go install github.com/shukiv/jabali-mcp/cmd/jabali-mcp@latest
+```
+
+The binary lands in `$(go env GOBIN)` (or `$(go env GOPATH)/bin`).
+
+### Verify
+
+```sh
+JABALI_PANEL_URL=https://panel.example:8443/api/v1 \
+JABALI_API_TOKEN=jat_… \
+jabali-mcp < /dev/null
+# -> jabali-mcp <version> — read-only; panels: [default]
+```
+
+It reads config from the environment, prints a one-line status to **stderr**,
+then serves MCP on stdin/stdout (it exits on EOF, which is why the `< /dev/null`
+smoke test returns immediately).
+
+## Set up
+
+**1. Mint an API token.** In the panel, go to the tenant shell → **API Tokens**
+and create one. The plaintext `jat_…` is shown once — copy it. Use a **non-admin**
+(tenant) token so the server is confined to that one account.
+
+**2. Point the server at your panel** with these environment variables:
+
+| Variable | Required | Meaning |
+|---|:---:|---|
+| `JABALI_PANEL_URL` | ✓ | e.g. `https://panel.example:8443/api/v1` |
+| `JABALI_API_TOKEN` | ✓ | the `jat_…` bearer token |
+| `JABALI_PANEL_NAME` | | logical name (default `default`) |
+| `JABALI_CA_FILE` | | PEM bundle to trust a self-hosted panel CA |
+| `JABALI_MCP_ALLOW_WRITE` | | `1` to enable mutating tools (default: read-only) |
+| `JABALI_MCP_DRY_RUN` | | `1` to force every write to preview instead of act |
+| `JABALI_PANELS_FILE` | | JSON array of panels for fleet mode (overrides the single-panel vars) |
+
+**3. Register it with your MCP client.**
+
+Claude Code (CLI):
+
+```sh
+claude mcp add jabali \
+  --env JABALI_PANEL_URL=https://panel.example:8443/api/v1 \
+  --env JABALI_API_TOKEN=jat_… \
+  -- /usr/local/bin/jabali-mcp
+```
+
+Claude Desktop — add to `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "jabali": {
+      "command": "/usr/local/bin/jabali-mcp",
+      "env": {
+        "JABALI_PANEL_URL": "https://panel.example:8443/api/v1",
+        "JABALI_API_TOKEN": "jat_…"
+      }
+    }
+  }
+}
+```
+
+Start read-only. When you want mutations, add `"JABALI_MCP_ALLOW_WRITE": "1"`
+(and consider `"JABALI_MCP_DRY_RUN": "1"` first to watch what it would do).
+
+### Fleet (multiple panels)
+
+Set `JABALI_PANELS_FILE` to a JSON array — it overrides the single-panel vars,
+and every tool then accepts an optional `panel` argument to target one:
 
 ```json
 [
@@ -61,6 +136,44 @@ one:
   { "name": "prod-b", "url": "https://b:8443/api/v1", "token": "jat_…" }
 ]
 ```
+
+## Auth model — inherits the panel's tenant isolation
+
+Tools authenticate with the per-user Bearer token. The token acts as its owning
+user and the panel enforces ownership on every endpoint, so the server can only
+ever reach the resources that token's user owns — a tenant token is confined to
+that tenant. That is why a non-admin token is the safe default.
+
+## Safety
+
+This fronts a hosting control plane, so mutation is fenced in four layers:
+
+1. **Read-only by default.** Write tools register only with `JABALI_MCP_ALLOW_WRITE=1`.
+2. **Destructive tools require `confirm: true`.** `delete_domain`,
+   `delete_dns_record`, `delete_mailbox`, `set_mailbox_password`, and
+   `restore_backup` return a preview and act only when re-called with
+   `confirm: true`. A model cannot destroy state in one step — the guard against
+   a prompt-injected tool call.
+3. **Tool hints.** Read tools carry `readOnlyHint`; destructive tools carry
+   `destructiveHint` so clients can surface the risk.
+4. **Dry-run.** Any write tool accepts `dry_run: true` to return the exact
+   request it *would* send without acting; `JABALI_MCP_DRY_RUN=1` forces that
+   globally.
+
+TLS verification is always on. To trust a self-hosted panel's private CA, point
+`JABALI_CA_FILE` at its bundle — that *adds* the CA, it never disables
+verification.
+
+## Tools
+
+**Read (always on):** `list_domains`, `get_domain`, `list_dns_records`,
+`list_mailboxes`, `list_forwarders`, `list_applications`, `list_databases`,
+`list_backups`, `list_api_tokens`.
+
+**Write (needs `JABALI_MCP_ALLOW_WRITE=1`):** `create_domain`,
+`create_dns_record`, `update_dns_record`, `create_mailbox`, `create_forwarder`,
+`create_backup` — plus the confirm-gated destructive set: `delete_domain`,
+`delete_dns_record`, `delete_mailbox`, `set_mailbox_password`, `restore_backup`.
 
 ## Tool generation
 
@@ -75,31 +188,17 @@ Tools are generated, not hand-written, so the surface can't drift from the API:
 - A curation entry naming an operation the spec lacks is a hard error (drift
   guard), and `TestGeneratedIsUpToDate` fails if the committed file is stale.
 
-To refresh after the panel API changes: copy the new `openapi.yaml` in, add or
-adjust `tools.yaml`, run `make gen`, review the diff.
+To refresh after the panel API changes: copy the new `openapi.yaml` in, adjust
+`tools.yaml`, run `make gen`, review the diff.
 
-## Tools
-
-**Read (always on):** `list_domains`, `get_domain`, `list_dns_records`,
-`list_mailboxes`, `list_forwarders`, `list_applications`, `list_databases`,
-`list_backups`, `list_api_tokens`.
-
-**Write (needs `JABALI_MCP_ALLOW_WRITE=1`):** `create_domain`,
-`create_dns_record`, `update_dns_record`, `create_mailbox`, `create_forwarder`,
-`create_backup` — plus the confirm-gated destructive set: `delete_domain`,
-`delete_dns_record`, `delete_mailbox`, `set_mailbox_password`, `restore_backup`.
-
-## Run
+## Development
 
 ```sh
-go build -o jabali-mcp ./cmd/jabali-mcp
-JABALI_PANEL_URL=https://panel.example:8443/api/v1 \
-JABALI_API_TOKEN=jat_… \
-./jabali-mcp        # speaks MCP over stdio
+make build     # build the binary
+make gen       # regenerate internal/tools/generated.go
+make test      # go test -race ./...
+make vet       # go vet ./...
 ```
-
-Register it with an MCP client (e.g. Claude) as a stdio server running the
-`jabali-mcp` binary with those env vars set.
 
 ## Layout
 
@@ -115,7 +214,7 @@ docs/DESIGN.md      architecture, security model, roadmap
 
 ## Roadmap
 
-- **M1 — read-only MVP** ✅ client, MCP stdio server, read tools, tests.
+- **M1 — read-only MVP** ✅ Bearer client, MCP stdio server, read tools, tests.
 - **M2 — gated mutations** ✅ write tools behind an opt-in flag; destructive ops
   confirm-gated.
 - **M3 — fleet** ✅ multi-panel registry + `panel` tool argument.
