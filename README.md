@@ -220,8 +220,9 @@ docs/DESIGN.md      architecture, security model, roadmap
 - **M3 — fleet** ✅ multi-panel registry + `panel` tool argument.
 - **Generator** ✅ tools generated from the spec + curation, golden-tested.
 - **Dry-run** ✅ per-call `dry_run` + global `JABALI_MCP_DRY_RUN`.
-- **Next:** per-tool input validation against the OpenAPI request schemas; admin
-  tools behind their own opt-in.
+- **Input validation** ✅ generated per-tool checks for the spec's value
+  constraints (enum, minLength, min/max) — fail fast before any request.
+- **Next:** admin tools behind their own opt-in.
 
 ## License
 

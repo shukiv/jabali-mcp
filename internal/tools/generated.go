@@ -157,6 +157,9 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 		}
 		mcp.AddTool(s, &mcp.Tool{Name: "create_dns_record", Description: "Create a record", Annotations: additiveAnno()},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in CreateDnsRecordIn) (*mcp.CallToolResult, any, error) {
+				if r := vEnum("type", in.Type, []string{"A", "AAAA", "CNAME", "MX", "TXT", "SRV", "CAA", "NS"}); r != nil {
+					return r, nil, nil
+				}
 				path := "/domains/" + url.PathEscape(in.DomainId) + "/dns/records"
 				body := map[string]any{}
 				body["content"] = in.Content
@@ -211,6 +214,9 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 		}
 		mcp.AddTool(s, &mcp.Tool{Name: "create_mailbox", Description: "create_mailbox", Annotations: additiveAnno()},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in CreateMailboxIn) (*mcp.CallToolResult, any, error) {
+				if r := vMinLen("password", in.Password, 12); r != nil {
+					return r, nil, nil
+				}
 				path := "/domains/" + url.PathEscape(in.DomainId) + "/mailboxes"
 				body := map[string]any{}
 				body["local_part"] = in.LocalPart
@@ -299,6 +305,9 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 		}
 		mcp.AddTool(s, &mcp.Tool{Name: "set_mailbox_password", Description: "Change mailbox password", Annotations: destructiveAnno()},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in SetMailboxPasswordIn) (*mcp.CallToolResult, any, error) {
+				if r := vMinLen("password", in.Password, 12); r != nil {
+					return r, nil, nil
+				}
 				path := "/mailboxes/" + url.PathEscape(in.MailboxId) + "/password"
 				body := map[string]any{}
 				body["password"] = in.Password

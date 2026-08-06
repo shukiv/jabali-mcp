@@ -236,6 +236,57 @@ func TestGlobalDryRunForcesPreview(t *testing.T) {
 	}
 }
 
+func TestInputValidationRejectsBeforePanel(t *testing.T) {
+	fp := &fakePanel{}
+	ts := httptest.NewServer(fp.handler())
+	defer ts.Close()
+
+	cs := connect(t, newOpts(t, ts.URL, true))
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	cases := []struct {
+		name string
+		args map[string]any
+		want string
+	}{
+		{
+			name: "create_dns_record",
+			args: map[string]any{"domain_id": "01D", "name": "vpn", "type": "BOGUS", "content": "1.2.3.4"},
+			want: "must be one of",
+		},
+		{
+			name: "create_mailbox",
+			args: map[string]any{"domain_id": "01D", "local_part": "alice", "password": "short", "quota_mb": 1024},
+			want: "at least 12 characters",
+		},
+	}
+	for _, tc := range cases {
+		res, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: tc.name, Arguments: tc.args})
+		if err != nil {
+			t.Fatalf("%s: %v", tc.name, err)
+		}
+		if !res.IsError || !strings.Contains(firstText(res), tc.want) {
+			t.Errorf("%s: expected validation error containing %q, got IsError=%v %q",
+				tc.name, tc.want, res.IsError, firstText(res))
+		}
+	}
+	if n := len(fp.methods()); n != 0 {
+		t.Fatalf("invalid input must not reach the panel, got %d calls", n)
+	}
+
+	// A valid create passes validation and reaches the panel.
+	if _, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "create_dns_record",
+		Arguments: map[string]any{"domain_id": "01D", "name": "vpn", "type": "A", "content": "1.2.3.4"},
+	}); err != nil {
+		t.Fatalf("valid create_dns_record: %v", err)
+	}
+	if got := fp.methods(); len(got) != 1 || got[0] != "POST /domains/01D/dns/records" {
+		t.Fatalf("valid create should POST once, got %v", got)
+	}
+}
+
 func firstText(res *mcp.CallToolResult) string {
 	for _, c := range res.Content {
 		if tc, ok := c.(*mcp.TextContent); ok {

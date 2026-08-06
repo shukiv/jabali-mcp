@@ -57,6 +57,9 @@ type schema struct {
 	Description string            `yaml:"description"`
 	Example     any               `yaml:"example"`
 	Enum        []string          `yaml:"enum"`
+	Minimum     *int              `yaml:"minimum"`
+	Maximum     *int              `yaml:"maximum"`
+	MinLength   *int              `yaml:"minLength"`
 	Required    []string          `yaml:"required"`
 	Properties  map[string]schema `yaml:"properties"`
 }
@@ -83,6 +86,10 @@ type field struct {
 	GoType   string
 	Required bool
 	Desc     string
+	Enum     []string // string enum constraint
+	Min      *int     // integer minimum
+	Max      *int     // integer maximum
+	MinLen   *int     // string minLength
 }
 
 type toolModel struct {
@@ -213,7 +220,11 @@ func buildModel(spec *oapiSpec, ct curatedTool) (toolModel, error) {
 					Required: reqSet[n],
 					// The MCP SDK requires a non-empty jsonschema description on
 					// every field; fall back to the property name.
-					Desc: firstNonEmpty(propDesc(ps), strings.ReplaceAll(n, "_", " ")),
+					Desc:   firstNonEmpty(propDesc(ps), strings.ReplaceAll(n, "_", " ")),
+					Enum:   ps.Enum,
+					Min:    ps.Minimum,
+					Max:    ps.Maximum,
+					MinLen: ps.MinLength,
 				})
 			}
 		}
@@ -368,6 +379,7 @@ func emitTool(b *strings.Builder, m toolModel) {
 		m.Name, m.Summary, anno)
 	fmt.Fprintf(b, "\t\t\tfunc(ctx context.Context, _ *mcp.CallToolRequest, in %s) (*mcp.CallToolResult, any, error) {\n", typeName)
 
+	emitValidate(b, m)
 	fmt.Fprintf(b, "\t\t\t\tpath := %s\n", pathExpr(m))
 	if m.Paginated {
 		b.WriteString("\t\t\t\tpath += listQuery(in.Page, in.PageSize, in.Q)\n")
@@ -392,6 +404,62 @@ func emitTool(b *strings.Builder, m toolModel) {
 		fmt.Fprintf(b, "\t\t\t\treturn runWrite(ctx, reg, in, false, \"\", reqSpec{%s, path, %s})\n", method, bodyExpr)
 	}
 	b.WriteString("\t\t\t})\n\t}\n")
+}
+
+// emitValidate emits the value-constraint checks the spec declares (enum,
+// minLength, minimum/maximum). Type and required-presence are already enforced
+// by the SDK from the inferred schema; this adds the value constraints and fails
+// fast with a precise message before any request is sent. Optional fields are
+// checked only when the caller supplied a value.
+func emitValidate(b *strings.Builder, m toolModel) {
+	for _, f := range m.BodyFields {
+		if len(f.Enum) == 0 && f.Min == nil && f.Max == nil && f.MinLen == nil {
+			continue
+		}
+		guarded := !f.Required
+		indent := "\t\t\t\t"
+		if guarded {
+			switch f.GoType {
+			case "string":
+				fmt.Fprintf(b, "%sif in.%s != \"\" {\n", indent, f.GoName)
+			case "int":
+				fmt.Fprintf(b, "%sif in.%s != 0 {\n", indent, f.GoName)
+			default:
+				guarded = false
+			}
+		}
+		body := indent
+		if guarded {
+			body = indent + "\t"
+		}
+		if len(f.Enum) > 0 {
+			fmt.Fprintf(b, "%sif r := vEnum(%q, in.%s, []string{%s}); r != nil {\n%s\treturn r, nil, nil\n%s}\n",
+				body, f.JSONName, f.GoName, quoteList(f.Enum), body, body)
+		}
+		if f.MinLen != nil {
+			fmt.Fprintf(b, "%sif r := vMinLen(%q, in.%s, %d); r != nil {\n%s\treturn r, nil, nil\n%s}\n",
+				body, f.JSONName, f.GoName, *f.MinLen, body, body)
+		}
+		if f.Min != nil {
+			fmt.Fprintf(b, "%sif r := vMin(%q, in.%s, %d); r != nil {\n%s\treturn r, nil, nil\n%s}\n",
+				body, f.JSONName, f.GoName, *f.Min, body, body)
+		}
+		if f.Max != nil {
+			fmt.Fprintf(b, "%sif r := vMax(%q, in.%s, %d); r != nil {\n%s\treturn r, nil, nil\n%s}\n",
+				body, f.JSONName, f.GoName, *f.Max, body, body)
+		}
+		if guarded {
+			fmt.Fprintf(b, "%s}\n", indent)
+		}
+	}
+}
+
+func quoteList(vals []string) string {
+	parts := make([]string, len(vals))
+	for i, v := range vals {
+		parts[i] = fmt.Sprintf("%q", v)
+	}
+	return strings.Join(parts, ", ")
 }
 
 func emitBodyAssign(b *strings.Builder, f field) {

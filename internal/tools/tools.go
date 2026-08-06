@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -139,6 +140,41 @@ func exec(ctx context.Context, c *client.Client, spec reqSpec) (*mcp.CallToolRes
 		return errResult(fmt.Sprintf("panel returned HTTP %d: %s", status, string(raw))), nil, nil
 	}
 	return textResult(string(raw)), nil, nil
+}
+
+// Input validators used by the generated tools. Each returns nil when the value
+// is valid, or an error result to return to the caller. They enforce the value
+// constraints the OpenAPI spec declares (the SDK already enforces types and
+// required-presence), failing fast with a precise message before any request.
+
+func vEnum(field, val string, allowed []string) *mcp.CallToolResult {
+	for _, a := range allowed {
+		if val == a {
+			return nil
+		}
+	}
+	return errResult(fmt.Sprintf("invalid %s %q: must be one of %s", field, val, strings.Join(allowed, ", ")))
+}
+
+func vMinLen(field, val string, n int) *mcp.CallToolResult {
+	if len([]rune(val)) < n {
+		return errResult(fmt.Sprintf("%s must be at least %d characters", field, n))
+	}
+	return nil
+}
+
+func vMin(field string, val, min int) *mcp.CallToolResult {
+	if val < min {
+		return errResult(fmt.Sprintf("%s must be >= %d (got %d)", field, min, val))
+	}
+	return nil
+}
+
+func vMax(field string, val, max int) *mcp.CallToolResult {
+	if val > max {
+		return errResult(fmt.Sprintf("%s must be <= %d (got %d)", field, max, val))
+	}
+	return nil
 }
 
 func textResult(s string) *mcp.CallToolResult {

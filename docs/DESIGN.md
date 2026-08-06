@@ -61,13 +61,23 @@ Jabali Panel REST API  ──►  ownership check (claims.UserID == resource.Use
   destructive ops confirm-gated; readOnly/destructive hints.
 - **M3 fleet** ✅ — multi-panel registry + `panel` tool argument.
 
+## Done since M1–M3
+
+- Tools generated from `openapi/openapi.yaml` + `openapi/tools.yaml`
+  (`internal/gen`), golden-tested against drift.
+- Dry-run mode (per-call `dry_run` + global `JABALI_MCP_DRY_RUN`).
+- Per-tool input validation: the generator emits checks for the value
+  constraints the spec declares (enum, minLength, minimum/maximum). The SDK
+  already enforces types + required-presence from the inferred schema; these add
+  the value constraints and fail fast with a precise message before any request.
+  (The `jsonschema` struct tag is description-only in the SDK, so the constraints
+  are enforced in the handler rather than encoded in the schema.)
+
 ## Next
 
-- Generate tools from `docs/api/openapi.yaml` (`internal/gen`) so the surface
-  can't drift from the API.
-- Per-tool input validation against the OpenAPI request schemas.
-- A dry-run mode (return the request that *would* be sent) for write tools.
 - Admin tools (`/admin/*`) behind their own explicit opt-in flag.
+- Optionally enrich the emitted `InputSchema` (enum/min/max) so clients see the
+  constraints in the tool schema, not only in the description.
 
 ## Open questions
 
