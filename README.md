@@ -95,24 +95,27 @@ and create one. The plaintext `jat_…` is shown once — copy it. Use a **non-a
 | `JABALI_MCP_DRY_RUN` | | `1` to force every write to preview instead of act |
 | `JABALI_PANELS_FILE` | | JSON array of panels for fleet mode (overrides the single-panel vars) |
 
-**3. Register it with your MCP client.**
+**3. Register it with your MCP client.** In every example below `jabali-mcp` is
+assumed on your `PATH` (else use its full path), and the two required env vars
+are shown inline. It's a stdio MCP server, so any MCP-capable client can launch
+it.
 
-Claude Code (CLI):
+**Claude Code** (CLI — writes `.mcp.json` / your Claude config):
 
 ```sh
 claude mcp add jabali \
   --env JABALI_PANEL_URL=https://panel.example:8443/api/v1 \
   --env JABALI_API_TOKEN=jat_… \
-  -- /usr/local/bin/jabali-mcp
+  -- jabali-mcp
 ```
 
-Claude Desktop — add to `claude_desktop_config.json`:
+**Claude Desktop** — `claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
     "jabali": {
-      "command": "/usr/local/bin/jabali-mcp",
+      "command": "jabali-mcp",
       "env": {
         "JABALI_PANEL_URL": "https://panel.example:8443/api/v1",
         "JABALI_API_TOKEN": "jat_…"
@@ -122,8 +125,84 @@ Claude Desktop — add to `claude_desktop_config.json`:
 }
 ```
 
-Start read-only. When you want mutations, add `"JABALI_MCP_ALLOW_WRITE": "1"`
-(and consider `"JABALI_MCP_DRY_RUN": "1"` first to watch what it would do).
+**OpenAI Codex** (CLI — writes `~/.codex/config.toml`):
+
+```sh
+codex mcp add jabali \
+  --env JABALI_PANEL_URL=https://panel.example:8443/api/v1 \
+  --env JABALI_API_TOKEN=jat_… \
+  -- jabali-mcp
+```
+
+or edit `~/.codex/config.toml` by hand — note it's **TOML**, and the key is
+`mcp_servers` (underscore), not the JSON `mcpServers`:
+
+```toml
+[mcp_servers.jabali]
+command = "jabali-mcp"
+
+[mcp_servers.jabali.env]
+JABALI_PANEL_URL = "https://panel.example:8443/api/v1"
+JABALI_API_TOKEN = "jat_…"
+```
+
+**OpenCode** — `opencode.json`:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "jabali": {
+      "type": "local",
+      "command": ["jabali-mcp"],
+      "environment": {
+        "JABALI_PANEL_URL": "https://panel.example:8443/api/v1",
+        "JABALI_API_TOKEN": "jat_…"
+      },
+      "enabled": true
+    }
+  }
+}
+```
+
+**Kimi Code CLI** (writes `~/.kimi/mcp.json`):
+
+```sh
+kimi mcp add --transport stdio jabali \
+  -e JABALI_PANEL_URL=https://panel.example:8443/api/v1 \
+  -e JABALI_API_TOKEN=jat_… \
+  -- jabali-mcp
+```
+
+**Cursor, Windsurf, Cline, Gemini CLI, and other clients** that use the standard
+`mcpServers` JSON take the same entry as Claude Desktop above — a
+`{ "command": "jabali-mcp", "env": { … } }` block under `mcpServers` in that
+client's config file.
+
+Start read-only. When you want mutations, add `JABALI_MCP_ALLOW_WRITE=1` to the
+env (and, at first, `JABALI_MCP_DRY_RUN=1` to watch what it would do).
+
+### Run it on a remote box over SSH
+
+Because it speaks stdio, any of the above can launch it **on a remote host over
+SSH** instead of locally — the tool stream tunnels through the SSH pipe. Set the
+client's command to `ssh` and pass the remote invocation as its argument, e.g.
+for Claude Desktop:
+
+```json
+{
+  "mcpServers": {
+    "jabali-prod": {
+      "command": "ssh",
+      "args": ["operator@box",
+        "JABALI_PANEL_URL=https://localhost:8443/api/v1 JABALI_API_TOKEN=jat_… jabali-mcp"]
+    }
+  }
+}
+```
+
+On the box the panel API is reachable at `localhost`, and the token still scopes
+everything to its user. Nothing to install client-side beyond an SSH key.
 
 ### Fleet (multiple panels)
 
