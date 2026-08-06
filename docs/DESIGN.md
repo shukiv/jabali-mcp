@@ -2,9 +2,9 @@
 
 ## Goal
 
-Expose the Jabali Panel automation API as MCP tools so an LLM agent can perform
-panel operations. Optimise for **reuse** (the automation API + OpenAPI already
-exist) and **safety** (this fronts a root-capable control plane).
+Expose the Jabali Panel REST API as MCP tools so an LLM agent can perform panel
+operations. Optimise for **reuse** (the REST API + OpenAPI already exist) and
+**safety** (this fronts a hosting control plane).
 
 ## Architecture
 
@@ -12,56 +12,64 @@ exist) and **safety** (this fronts a root-capable control plane).
 LLM client (Claude, …)
       │  MCP (stdio)
       ▼
-jabali-mcp
-      │  HTTPS + X-Jabali-Signature (HMAC-SHA256, ADR-0093)
+jabali-mcp   ── internal/tools (read.go, write.go)
+      │  HTTPS  Authorization: Bearer jat_…
       ▼
-Jabali Panel automation API  ──►  RequireScope ──►  handlers
+Jabali Panel REST API  ──►  ownership check (claims.UserID == resource.UserID | is_admin)
 ```
 
-- **Tools are generated from `docs/api/openapi.yaml`** (jabali-panel repo). Each
-  operation carrying an automation scope becomes one tool. Regeneration keeps
-  the MCP surface in lockstep with the API.
-- **Auth**: the server signs each request with an `automation_token`
-  (HMAC-SHA256 over `METHOD || PATH || ts || sha256(BODY)`, 5-minute skew).
-- **Idempotency**: reuse the panel's `automation_operation` replay mechanism so
-  a retried tool call is safe.
+- **Auth = per-user Bearer token** (`jat_…`). The token acts as its user and the
+  panel enforces ownership server-side, so the MCP inherits the panel's tenant
+  isolation with no extra work. (An earlier draft assumed the HMAC automation
+  API; the documented Bearer path in `docs/api/openapi.yaml` is simpler and
+  already ownership-scoped, so we use it.)
+- **Tools** are hand-written from the OpenAPI spec today, one per operation.
+  Generating them from the spec is the next step (`internal/gen`).
+- **Fleet** is a registry of named clients; a tool's optional `panel` argument
+  selects one, defaulting to the first configured.
 
-## Security (the dominant concern)
+## Security
 
-1. **Scope-per-tool, minimally scoped token.** Every tool declares its required
-   scope; the server's credential is granted only the scopes for the tools it
-   exposes. `write:everything` is never granted to an MCP credential.
-2. **Read-only default.** The default build registers only `read:*` tools. The
-   write set is a separate, opt-in registration.
-3. **Confirmation gate on destructive tools.** Delete user, restore, and DNS/SSL
-   writes require an explicit confirmation turn — they are never invoked purely
-   on model output. Prompt injection (model reads tenant-controlled domain
-   names / file contents / logs, then is steered to mutate) is the threat model.
-4. **No secret leakage.** Tool outputs are audited so no token id, secret, or
-   password hash is ever returned (the panel already marks these `json:"-"`).
-5. **Audit trail.** Every tool call is an automation-API request, so it lands in
-   the panel's existing automation operation log — no separate audit path.
+1. **Non-admin token, per-user isolation.** Use a tenant token; the panel
+   confines it to that tenant. An admin token is is_admin and far more
+   dangerous — avoid unless the task genuinely needs it.
+2. **Read-only default.** Write tools register only when
+   `JABALI_MCP_ALLOW_WRITE=1`.
+3. **Confirm gate on destructive tools.** delete_*, set_mailbox_password, and
+   restore_backup return a preview and act only on a second call with
+   `confirm: true`. This is the guard against a prompt-injected destructive
+   call — the model reads tenant-controlled data (domain names, records) and
+   could be steered to delete; one call can't.
+4. **TLS always verified.** Trust a private CA via `JABALI_CA_FILE` (adds the
+   CA); never disable verification.
+5. **No secret leakage.** `list_api_tokens` returns metadata only — the panel
+   never returns the token secret (`json:"-"`).
+6. **Audit trail.** Every tool call is a REST request in the panel's own logs.
 
 ## Deployment shapes
 
-- **Operator-local (phase 1–2):** runs on the operator's machine, one panel,
-  one credential. Smallest blast radius. Ship as a single static binary.
-- **Fleet (phase 3):** one server fronting many panels; per-panel credential
-  custody; for bulk migration/DNS/SSL work. Deferred — larger blast radius.
+- **Operator-local (default):** one panel, one token, stdio server on the
+  operator's machine. Smallest blast radius.
+- **Fleet:** `JABALI_PANELS_FILE` with several panels; tools take a `panel`
+  argument. For bulk cross-panel work. Larger blast radius — pair with
+  read-only or per-panel non-admin tokens.
 
 ## Milestones
 
-1. **M1 — read-only MVP.** openapi→tools generator for `read:*` operations; HMAC
-   client; MCP stdio server; config loading. Verify against a live panel's
-   automation API with a read-scoped token.
-2. **M2 — gated mutations.** Write tools behind an opt-in scope set +
-   confirmation gating + a dry-run mode.
-3. **M3 — fleet.** Multi-panel credential store; panel selection as a tool
-   argument or per-session binding.
+- **M1 read-only MVP** ✅ — Bearer client, MCP stdio server, read tools, tests.
+- **M2 gated mutations** ✅ — write tools behind the allow-write flag;
+  destructive ops confirm-gated; readOnly/destructive hints.
+- **M3 fleet** ✅ — multi-panel registry + `panel` tool argument.
+
+## Next
+
+- Generate tools from `docs/api/openapi.yaml` (`internal/gen`) so the surface
+  can't drift from the API.
+- Per-tool input validation against the OpenAPI request schemas.
+- A dry-run mode (return the request that *would* be sent) for write tools.
+- Admin tools (`/admin/*`) behind their own explicit opt-in flag.
 
 ## Open questions
 
-- MCP Go SDK choice + version (verify current API via live docs before wiring).
-- Generator: hand-rolled over `openapi.yaml`, or an existing openapi→MCP tool
-  adapted to Go.
-- Confirmation-gate UX in MCP (elicitation vs. a two-call confirm token).
+- Confirmation-gate UX: the current two-call `confirm:true` vs. MCP elicitation.
+- Whether to expose admin endpoints at all, and under what extra guard.

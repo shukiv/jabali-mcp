@@ -1,28 +1,34 @@
 // Command jabali-mcp is a Model Context Protocol server that exposes the
-// Jabali Panel automation API as MCP tools.
+// Jabali Panel REST API as MCP tools.
 //
-// Design (see docs/DESIGN.md):
-//   - Each MCP tool maps 1:1 to a Jabali automation-API operation.
-//   - Tools authenticate with a scoped automation_token (HMAC-SHA256, ADR-0093);
-//     the server NEVER holds the write:everything scope by default.
-//   - Read-only tools are the default surface. Mutating and destructive tools
-//     (delete user, restore, DNS/SSL writes) are opt-in and confirmation-gated.
-//   - Tool definitions are generated from the panel's docs/api/openapi.yaml so
-//     the surface stays in lockstep with the API (the panel's OpenAPI coverage
-//     golden test keeps that spec honest).
+// Auth is a per-user Bearer token (jat_…); the panel enforces ownership, so the
+// server inherits the panel's tenant isolation. Read tools are always exposed;
+// mutating tools require JABALI_MCP_ALLOW_WRITE, and destructive ones require an
+// explicit confirm=true per call.
 //
-// This is the entry-point skeleton. Wiring the MCP SDK, the HMAC client, and
-// the openapi->tools generator is the first implementation milestone — see
-// docs/DESIGN.md and the README.
+// Configuration (environment):
+//
+//	JABALI_PANEL_URL     https://panel.example:8443/api/v1   (single-panel)
+//	JABALI_API_TOKEN     jat_…                               (single-panel)
+//	JABALI_PANEL_NAME    logical name (optional; default "default")
+//	JABALI_CA_FILE       PEM bundle to trust a self-hosted panel CA (optional)
+//	JABALI_PANELS_FILE   JSON array of panels for fleet mode (overrides the above)
+//	JABALI_MCP_ALLOW_WRITE=1  enable mutating tools (default: read-only)
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/shukiv/jabali-mcp/internal/client"
+	"github.com/shukiv/jabali-mcp/internal/tools"
 )
 
 // version is set at build time via -ldflags "-X main.version=...".
-var version = "0.0.0-dev"
+var version = "0.1.0-dev"
 
 func main() {
 	if err := run(); err != nil {
@@ -32,10 +38,25 @@ func main() {
 }
 
 func run() error {
-	// TODO(milestone-1): construct the MCP server over stdio, register the
-	// generated read-only tools, and serve. Kept as a stub so the module
-	// compiles with zero external dependencies until the SDK is wired (the
-	// SDK API is verified against current docs before it is imported).
-	fmt.Printf("jabali-mcp %s — skeleton; see docs/DESIGN.md\n", version)
-	return nil
+	opts, err := client.LoadOptions()
+	if err != nil {
+		return err
+	}
+
+	srv := mcp.NewServer(&mcp.Implementation{
+		Name:    "jabali-mcp",
+		Title:   "Jabali Panel",
+		Version: version,
+	}, nil)
+
+	tools.Register(srv, opts)
+
+	// Startup line goes to stderr so it never corrupts the stdio MCP stream.
+	mode := "read-only"
+	if opts.AllowWrite {
+		mode = "read-write (mutations enabled; destructive ops still require confirm=true)"
+	}
+	fmt.Fprintf(os.Stderr, "jabali-mcp %s — %s; panels: %v\n", version, mode, opts.Registry.Names())
+
+	return srv.Run(context.Background(), &mcp.StdioTransport{})
 }
