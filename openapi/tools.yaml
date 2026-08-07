@@ -28,11 +28,14 @@ tools:
 
   # --- Write (additive) ---
   - { op: "POST /domains",                   name: create_domain,     group: write }
+  - { op: "PATCH /domains/{id}",             name: update_domain,     group: write }
   - { op: "POST /domains/{id}/dns/records",  name: create_dns_record, group: write }
   - { op: "PATCH /dns/records/{id}",         name: update_dns_record, group: write }
   - { op: "POST /domains/{id}/mailboxes",    name: create_mailbox,    group: write }
   - { op: "POST /domains/{id}/forwarders",   name: create_forwarder,  group: write }
   - { op: "POST /me/backups",                name: create_backup,     group: write }
+  - { op: "POST /applications",              name: install_application, group: write }
+  - { op: "POST /databases",                 name: create_database,   group: write }
 
   # --- Write (destructive; confirm-gated) ---
   - { op: "DELETE /domains/{id}",            name: delete_domain,        group: write, destructive: true }

@@ -421,7 +421,21 @@ paths:
       responses: { "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Domain" } } } } }
     patch:
       tags: [Domains]
+      summary: Update a domain's settings (partial — absent fields are left untouched)
       parameters: [ { in: path, name: id, required: true, schema: { type: string, format: ulid } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                is_enabled:        { type: boolean, description: "Enable or disable the site (vhost stays, serving stops)." }
+                webmail_enabled:   { type: boolean, description: "Toggle the webmail subdomain for this domain." }
+                temp_url_enabled:  { type: boolean, description: "Toggle the preview (temp) URL for this domain." }
+                ssl_mode:          { type: string, enum: [le, self, none], description: "TLS mode: le = Let's Encrypt, self = self-signed, none = HTTP only. (custom/shared are managed via the panel's SSL settings.)" }
+                redirect_all_to:   { type: string, description: "Redirect the whole site to this URL (clearing a redirect is done in the panel UI)." }
+                redirect_all_type: { type: string, enum: ["301", "302", "307", "308"], description: "HTTP status for the site-wide redirect." }
       responses: { "200": { description: Updated } }
     delete:
       tags: [Domains]

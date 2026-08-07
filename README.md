@@ -302,12 +302,13 @@ verification.
 
 **Read (always on):** `list_domains`, `get_domain`, `list_dns_records`,
 `list_mailboxes`, `list_forwarders`, `list_applications`, `list_databases`,
-`list_backups`, `list_api_tokens`.
+`list_backups`, `list_api_tokens`, `list_mail_logs`, `tail_web_log`.
 
-**Write (needs `JABALI_MCP_ALLOW_WRITE=1`):** `create_domain`,
+**Write (needs `JABALI_MCP_ALLOW_WRITE=1`):** `create_domain`, `update_domain`,
 `create_dns_record`, `update_dns_record`, `create_mailbox`, `create_forwarder`,
-`create_backup` — plus the confirm-gated destructive set: `delete_domain`,
-`delete_dns_record`, `delete_mailbox`, `set_mailbox_password`, `restore_backup`.
+`create_backup`, `install_application`, `create_database` — plus the
+confirm-gated destructive set: `delete_domain`, `delete_dns_record`,
+`delete_mailbox`, `set_mailbox_password`, `restore_backup`.
 
 ## Tool generation
 

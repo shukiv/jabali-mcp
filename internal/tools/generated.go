@@ -209,6 +209,53 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 			})
 	}
 	{
+		type UpdateDomainIn struct {
+			panelArg
+			dryRunArg
+			DomainId        string `json:"domain_id" jsonschema:"the domain's ULID"`
+			IsEnabled       *bool  `json:"is_enabled,omitempty" jsonschema:"Enable or disable the site (vhost stays, serving stops)."`
+			RedirectAllTo   string `json:"redirect_all_to,omitempty" jsonschema:"Redirect the whole site to this URL (clearing a redirect is done in the panel UI)."`
+			RedirectAllType string `json:"redirect_all_type,omitempty" jsonschema:"HTTP status for the site-wide redirect."`
+			SslMode         string `json:"ssl_mode,omitempty" jsonschema:"TLS mode: le = Let's Encrypt, self = self-signed, none = HTTP only. (custom/shared are managed via the panel's SSL settings.)"`
+			TempUrlEnabled  *bool  `json:"temp_url_enabled,omitempty" jsonschema:"Toggle the preview (temp) URL for this domain."`
+			WebmailEnabled  *bool  `json:"webmail_enabled,omitempty" jsonschema:"Toggle the webmail subdomain for this domain."`
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "update_domain", Description: "Update a domain's settings (partial — absent fields are left untouched)", Annotations: additiveAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in UpdateDomainIn) (*mcp.CallToolResult, any, error) {
+				if in.RedirectAllType != "" {
+					if r := vEnum("redirect_all_type", in.RedirectAllType, []string{"301", "302", "307", "308"}); r != nil {
+						return r, nil, nil
+					}
+				}
+				if in.SslMode != "" {
+					if r := vEnum("ssl_mode", in.SslMode, []string{"le", "self", "none"}); r != nil {
+						return r, nil, nil
+					}
+				}
+				path := "/domains/" + url.PathEscape(in.DomainId)
+				body := map[string]any{}
+				if in.IsEnabled != nil {
+					body["is_enabled"] = *in.IsEnabled
+				}
+				if in.RedirectAllTo != "" {
+					body["redirect_all_to"] = in.RedirectAllTo
+				}
+				if in.RedirectAllType != "" {
+					body["redirect_all_type"] = in.RedirectAllType
+				}
+				if in.SslMode != "" {
+					body["ssl_mode"] = in.SslMode
+				}
+				if in.TempUrlEnabled != nil {
+					body["temp_url_enabled"] = *in.TempUrlEnabled
+				}
+				if in.WebmailEnabled != nil {
+					body["webmail_enabled"] = *in.WebmailEnabled
+				}
+				return runWrite(ctx, reg, in, false, "", reqSpec{http.MethodPatch, path, body})
+			})
+	}
+	{
 		type CreateDnsRecordIn struct {
 			panelArg
 			dryRunArg
@@ -315,6 +362,48 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 			func(ctx context.Context, _ *mcp.CallToolRequest, in CreateBackupIn) (*mcp.CallToolResult, any, error) {
 				path := "/me/backups"
 				return runWrite(ctx, reg, in, false, "", reqSpec{http.MethodPost, path, nil})
+			})
+	}
+	{
+		type InstallApplicationIn struct {
+			panelArg
+			dryRunArg
+			DomainId string `json:"domain_id" jsonschema:"domain id"`
+			Kind     string `json:"kind" jsonschema:"one of: wordpress, joomla, drupal, moodle, ghost, opencart, prestashop, magento, drupal10, mediawiki, nextcloud, mautic, suitecrm, dolibarr, processmaker"`
+			Path     string `json:"path,omitempty" jsonschema:"Install path under doc-root."`
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "install_application", Description: "Install an app (WordPress, Joomla, etc.)", Annotations: additiveAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in InstallApplicationIn) (*mcp.CallToolResult, any, error) {
+				if r := vEnum("kind", in.Kind, []string{"wordpress", "joomla", "drupal", "moodle", "ghost", "opencart", "prestashop", "magento", "drupal10", "mediawiki", "nextcloud", "mautic", "suitecrm", "dolibarr", "processmaker"}); r != nil {
+					return r, nil, nil
+				}
+				path := "/applications"
+				body := map[string]any{}
+				body["domain_id"] = in.DomainId
+				body["kind"] = in.Kind
+				if in.Path != "" {
+					body["path"] = in.Path
+				}
+				return runWrite(ctx, reg, in, false, "", reqSpec{http.MethodPost, path, body})
+			})
+	}
+	{
+		type CreateDatabaseIn struct {
+			panelArg
+			dryRunArg
+			Engine string `json:"engine" jsonschema:"one of: mysql, postgres"`
+			Name   string `json:"name" jsonschema:"e.g. myapp_prod"`
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "create_database", Description: "Create a database", Annotations: additiveAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in CreateDatabaseIn) (*mcp.CallToolResult, any, error) {
+				if r := vEnum("engine", in.Engine, []string{"mysql", "postgres"}); r != nil {
+					return r, nil, nil
+				}
+				path := "/databases"
+				body := map[string]any{}
+				body["engine"] = in.Engine
+				body["name"] = in.Name
+				return runWrite(ctx, reg, in, false, "", reqSpec{http.MethodPost, path, body})
 			})
 	}
 	{
