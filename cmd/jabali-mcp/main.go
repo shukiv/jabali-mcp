@@ -39,6 +39,12 @@ func main() {
 				os.Exit(1)
 			}
 			return
+		case "update":
+			if err := runUpdate(os.Args[2:]); err != nil {
+				fmt.Fprintf(os.Stderr, "jabali-mcp update: %v\n", err)
+				os.Exit(1)
+			}
+			return
 		case "-h", "--help", "help":
 			usage()
 			return
@@ -63,6 +69,7 @@ func usage() {
 Usage:
   jabali-mcp            run the MCP server over stdio (for an MCP client)
   jabali-mcp init       interactive setup: configure panels, write config
+  jabali-mcp update     reinstall the latest jabali-mcp (go install …@latest)
   jabali-mcp help       show this help
   jabali-mcp version    print the version
 

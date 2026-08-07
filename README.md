@@ -64,6 +64,19 @@ go install github.com/shukiv/jabali-mcp/cmd/jabali-mcp@latest
 
 The binary lands in `$(go env GOBIN)` (or `$(go env GOPATH)/bin`).
 
+### Update
+
+```sh
+jabali-mcp update          # re-installs the latest (go install …@latest)
+jabali-mcp update --ref v1.2.3   # pin a tag/commit
+jabali-mcp update --dry-run      # print the command only
+```
+
+Self-update runs `go install` with `GOPRIVATE` set for the private repo, so it
+needs Go and git access to `github.com/shukiv`. Restart your MCP client afterward
+to pick up the new binary. (Installed from a checkout instead? `git pull && make
+build`.)
+
 ### Verify
 
 ```sh
