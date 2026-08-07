@@ -14,11 +14,28 @@ at **v0.2.0**.
 - **Toolchain:** Go 1.25, module `github.com/shukiv/jabali-mcp`,
   MCP SDK `github.com/modelcontextprotocol/go-sdk` v1.2.0.
 
-## Current state (v0.2.0)
+## Current state (v0.3.0)
 
-- 11 read tools, 9 additive write tools, 5 confirm-gated destructive tools,
-  5 admin tools — **all generated** from the vendored OpenAPI spec + a curation
-  file (see "Generator pipeline").
+- 32 read tools, 19 additive write tools, 16 confirm-gated destructive tools,
+  7 admin tools — all generated from the vendored OpenAPI spec + a curation
+  file (see "Generator pipeline") — plus the hand-written composite
+  `diagnose_domain` (internal/tools/composite.go).
+- The v0.3.0 expansion (SSL, cron, DB users/grants, mailbox depth, SSH keys,
+  PHP settings, files read-only, diagnostics) was **handler-verified**: every
+  request body and auth scope checked against panel handler source at deployed
+  commit `01c2adaf`, not the spec (the spec's request bodies are skeletal).
+  Notable: `/domains/{id}/ssl/renew` and `/ssl/retry` are RequireAdmin despite
+  the tenant-looking paths → shipped as `admin_renew_ssl` / `admin_retry_ssl`.
+- InputSchema now carries the spec's enum/min/max/minLength (generator grafts
+  them onto the SDK-inferred schema), so clients see constraints in tools/list
+  and the SDK rejects violations at the protocol level; the runtime v*
+  validators remain as defense-in-depth.
+- `docs/TOOLS.md` is generated (`make docs`); two tests guard it:
+  TestDocsUpToDate (golden) and TestDocsCoverEveryTool (every registered tool —
+  including hand-written ones — must have a heading).
+- `scripts/smoke` is a live zero-mutation smoke client (reads + dry-run
+  previews + a schema-rejection probe). Run before every tag:
+  `make build && go run ./scripts/smoke ./jabali-mcp`.
 - Registered in the operator's Claude Code as a pinned-version launch:
   `go run github.com/shukiv/jabali-mcp/cmd/jabali-mcp@v0.2.0` with
   `GOPRIVATE=github.com/shukiv/*` (the npx analog for a compiled Go tool;
@@ -135,21 +152,19 @@ first panel.
 | Client registration pinned to a tag (`go run …@vX.Y.Z`) | reproducible, updatable by re-registering; no stale local binary |
 | Panel-side setup UI (not a config wizard app) | users mint the token in the panel anyway; the page assembles client config in-browser and **never sends the token to the server** |
 
-## Tool surface (v0.2.0)
+## Tool surface (v0.3.0)
 
-- **Read (always):** `list_domains`, `get_domain`, `list_dns_records`,
-  `list_mailboxes`, `list_forwarders`, `list_applications`, `list_databases`,
-  `list_backups`, `list_api_tokens`, `list_mail_logs`, `tail_web_log`.
-- **Write (`ALLOW_WRITE`):** `create_domain`, `update_domain`,
-  `create_dns_record`, `update_dns_record`, `create_mailbox`,
-  `create_forwarder`, `create_backup`, `install_application`,
-  `create_database`.
-- **Destructive (`ALLOW_WRITE` + `confirm`):** `delete_domain`,
-  `delete_dns_record`, `delete_mailbox`, `set_mailbox_password`,
-  `restore_backup`.
-- **Admin (`ADMIN`, admin token; writes also need `ALLOW_WRITE`):**
-  `admin_list_users`, `admin_create_user`, `admin_get_settings`,
-  `admin_update_settings`, `admin_run_updates` (confirm-gated).
+75 tools; the full generated reference is `docs/TOOLS.md` (`make docs`).
+Groups: 32 read (+ composite `diagnose_domain`), 19 write (`ALLOW_WRITE`),
+16 destructive (`ALLOW_WRITE` + `confirm: true` — every delete/revoke/
+rotate-password plus `set_mailbox_password`, `restore_backup`, `disable_ssl`),
+7 admin (`ADMIN` + admin token; writes also need `ALLOW_WRITE`;
+`admin_run_updates` confirm-gated).
+
+Secret-bearing tools (by panel design, reveal-once): `create_database_user`,
+`rotate_database_password`, `rotate_mailbox_password` return plaintext
+passwords; `preview_file` can read files containing credentials
+(wp-config.php). All flagged in their descriptions.
 
 `update_domain`'s field set was **verified against the panel handler**
 (`updateDomainRequest` in `panel-api/internal/api/domains.go`), not just the
@@ -170,7 +185,9 @@ are deliberately not exposed.
    `update --ref vX.Y.Z`).
 
 History: v0.1.0 (first pinned release), v0.2.0 (update_domain,
-install_application, create_database).
+install_application, create_database), v0.3.0 (39 handler-verified tools —
+SSL/cron/DB-users/mail-depth/SSH/PHP/files, `diagnose_domain` composite,
+InputSchema constraints, generated docs/TOOLS.md, scripts/smoke).
 
 ## Panel-side integration (jabali2)
 
@@ -201,7 +218,19 @@ All merged to `jabali-panel` main (`01c2adaf`) and deployed to testserver:
   ride enum/min/max constraints on the tag; that's why the generator emits
   explicit `vEnum`/`vMinLen`/`vMin`/`vMax` checks in handlers. The SDK panics
   on an **empty** tag, so the generator falls back to the field name when the
-  spec has no description.
+  spec has no description. Since v0.3.0 the generator ALSO sets
+  `Tool.InputSchema` explicitly (SDK-inferred via `jsonschema.For` + grafted
+  constraints) — a pre-set schema is respected by `mcp.AddTool` (`setSchema`
+  in the SDK), and violations then fail the `tools/call` request itself
+  (JSON-RPC error), not an in-band IsError result. Tests must expect that.
+- **The panel spec is skeletal** — request bodies and query params are mostly
+  absent from `panel-api/internal/api/openapi.yaml`. Handler source is truth;
+  the vendored spec here carries hand-authored bodies verified against
+  handlers. When refreshing the spec, MERGE selectively — a wholesale copy
+  clobbers those bodies.
+- **The jabali2 checkout may sit on a feature branch** — for spec/handler
+  verification, read from the deployed commit (`git show <deployed-sha>:…`),
+  not the working tree (bit us: the checkout predated the `/logs/tail` merge).
 - **Generator body semantics:** optional string fields are skipped when empty,
   so "send empty string to clear a field" API semantics are unreachable through
   MCP tools — don't document them as reachable (bit us on
@@ -229,19 +258,18 @@ All merged to `jabali-panel` main (`01c2adaf`) and deployed to testserver:
 - In-memory MCP transport (`mcp.NewInMemoryTransports`) exercises the real
   register/gate/serialize path in unit tests without a client.
 
-## Ideas / next steps (none started)
+## Ideas / next steps
 
-- Enrich the emitted InputSchema so enum/min/max are visible to clients (today
-  they're description text + runtime checks).
-- Composite diagnostic tool (`diagnose_domain`: SSL + DNS + recent errors in
-  one triage answer) — the real differentiator over raw REST; needs panel
-  status endpoints (`ssl_status`, `resource_usage`) first.
-- `ssl_enable` tool (issue Let's Encrypt) — repeatedly requested during
-  migration cutovers.
+Done in v0.3.0: InputSchema constraints, `diagnose_domain`, `enable_ssl`,
+generated `docs/TOOLS.md`, live smoke script, `update --check` version check.
+
+Remaining:
+
 - CLI mode (tools as subcommands for SSH-only users).
 - MCP resources/prompts: expose panel runbooks as resources, canned prompts.
-- Public release would need: repo public (drops the GOPRIVATE friction),
-  GitHub Releases with prebuilt binaries, and a version-check in `update`.
+- Public release: flip repo visibility (operator decision — publishes history),
+  GitHub Releases with prebuilt binaries (workflow exists:
+  `.github/workflows/release.yml`), drop GOPRIVATE notes from README.
 
 ## Operational notes
 

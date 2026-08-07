@@ -302,6 +302,9 @@ verification.
 
 ## Tools
 
+Full per-tool reference with arguments and constraints: **[docs/TOOLS.md](docs/TOOLS.md)**
+(generated — `make docs`).
+
 **Read (always on):** `list_domains`, `get_domain`, `list_dns_records`,
 `list_mailboxes`, `list_forwarders`, `list_applications`, `list_databases`,
 `list_backups`, `list_api_tokens`, `list_mail_logs`, `tail_web_log`,
@@ -350,9 +353,13 @@ To refresh after the panel API changes: copy the new `openapi.yaml` in, adjust
 
 ```sh
 make build     # build the binary
-make gen       # regenerate internal/tools/generated.go
+make gen       # regenerate internal/tools/generated*.go + docs/TOOLS.md
+make docs      # regenerate docs/TOOLS.md only
 make test      # go test -race ./...
 make vet       # go vet ./...
+
+# zero-mutation live smoke against your configured panel (run before a release):
+make build && go run ./scripts/smoke ./jabali-mcp
 ```
 
 ## Layout
@@ -362,8 +369,11 @@ cmd/jabali-mcp/     entry point (stdio MCP server)
 cmd/gen-tools/      CLI wrapper over internal/gen
 internal/client/    Bearer-token HTTP client + fleet registry
 internal/tools/     tools.go (helpers + gate) + generated.go (the tools)
-internal/gen/       openapi.yaml + tools.yaml -> generated.go
+                    + composite.go (hand-written diagnose_domain)
+internal/gen/       openapi.yaml + tools.yaml -> generated.go + docs/TOOLS.md
 openapi/            vendored spec + curation
+scripts/smoke/      zero-mutation live smoke client (pre-release check)
+docs/TOOLS.md       generated tool reference (make docs)
 docs/DESIGN.md      architecture, security model, roadmap
 HANDOVER.md         full project handover: decisions, traps, release process
 ```

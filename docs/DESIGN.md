@@ -78,13 +78,18 @@ Jabali Panel REST API  ──►  ownership check (claims.UserID == resource.Use
   the server auto-discovers (no env needed after setup). Config resolution:
   `JABALI_PANELS_FILE` → single-panel env → default `panels.json`.
 
-## Next
+## Done since (v0.3.0)
 
-- Admin tools (`/admin/*`) behind their own explicit opt-in flag.
-- Optionally enrich the emitted `InputSchema` (enum/min/max) so clients see the
-  constraints in the tool schema, not only in the description.
+- Admin tools (`/admin/*`) behind `JABALI_MCP_ADMIN=1` + an admin token —
+  same binary, separate registration group.
+- InputSchema enrichment: the generator grafts the spec's enum/min/max/
+  minLength onto the SDK-inferred schema; clients see constraints in
+  tools/list and the SDK rejects violations before the handler.
+- 39 handler-verified tools (SSL, cron, DB users/grants, mailbox depth, SSH
+  keys, PHP settings, read-only files, diagnostics) + the hand-written
+  composite `diagnose_domain`.
+- Generated tool reference (`docs/TOOLS.md`, `make docs`) with drift tests.
 
 ## Open questions
 
 - Confirmation-gate UX: the current two-call `confirm:true` vs. MCP elicitation.
-- Whether to expose admin endpoints at all, and under what extra guard.
