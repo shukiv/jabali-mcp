@@ -12,6 +12,7 @@
 // token can only reach that tenant's resources regardless of what a tool asks
 // for.
 //go:generate go run ../../cmd/gen-tools -spec ../../openapi/openapi.yaml -curation ../../openapi/tools.yaml -out generated.go
+//go:generate go run ../../cmd/gen-tools -spec ../../openapi/openapi.yaml -curation ../../openapi/admin-tools.yaml -out generated_admin.go -group Admin
 
 package tools
 
@@ -32,13 +33,20 @@ import (
 // Register at startup, read-only thereafter.
 var globalDryRun bool
 
-// Register adds every enabled tool to the server.
+// Register adds every enabled tool to the server. The admin group is added only
+// when opts.Admin is set (and, per tool, gated by the panel's RequireAdmin).
 func Register(s *mcp.Server, opts client.Options) {
 	globalDryRun = opts.DryRun
 	reg := opts.Registry
 	registerRead(s, reg)
 	if opts.AllowWrite {
 		registerWrite(s, reg)
+	}
+	if opts.Admin {
+		registerAdminRead(s, reg)
+		if opts.AllowWrite {
+			registerAdminWrite(s, reg)
+		}
 	}
 }
 

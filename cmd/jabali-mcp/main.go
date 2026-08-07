@@ -94,6 +94,9 @@ func run() error {
 	if opts.DryRun {
 		mode += " [DRY RUN: writes preview only]"
 	}
+	if opts.Admin {
+		mode += " [ADMIN tools exposed — needs an admin token]"
+	}
 	fmt.Fprintf(os.Stderr, "jabali-mcp %s — %s; panels: %v\n", version, mode, opts.Registry.Names())
 
 	return srv.Run(context.Background(), &mcp.StdioTransport{})

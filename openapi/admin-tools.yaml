@@ -1,0 +1,13 @@
+# Admin curation — the /admin/* operator surface, generated into a SEPARATE
+# registration group (registerAdminRead / registerAdminWrite) and exposed only
+# when JABALI_MCP_ADMIN=1 AND the token is an admin token (the panel's
+# RequireAdmin enforces the latter server-side). This is a deliberately separate,
+# opt-in surface because it fronts whole-box operations — much larger blast
+# radius than the tenant tools. Same fields as tools.yaml.
+
+tools:
+  - { op: "GET /admin/users",         name: admin_list_users,      group: read, paginated: true }
+  - { op: "POST /admin/users",        name: admin_create_user,     group: write }
+  - { op: "GET /admin/settings",      name: admin_get_settings,    group: read }
+  - { op: "PATCH /admin/settings",    name: admin_update_settings, group: write }
+  - { op: "POST /admin/updates/run",  name: admin_run_updates,     group: write, destructive: true }

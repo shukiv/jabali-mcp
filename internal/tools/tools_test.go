@@ -287,6 +287,45 @@ func TestInputValidationRejectsBeforePanel(t *testing.T) {
 	}
 }
 
+func TestAdminToolsGatedByFlag(t *testing.T) {
+	fp := &fakePanel{}
+	ts := httptest.NewServer(fp.handler())
+	defer ts.Close()
+
+	// Without JABALI_MCP_ADMIN: admin tools absent even in write mode.
+	cs := connect(t, newOpts(t, ts.URL, true))
+	names := toolNames(t, cs)
+	for _, a := range []string{"admin_list_users", "admin_create_user", "admin_run_updates"} {
+		if names[a] {
+			t.Errorf("admin tool %q must not register without JABALI_MCP_ADMIN", a)
+		}
+	}
+
+	// With Admin + write: admin tools present.
+	opts := newOpts(t, ts.URL, true)
+	opts.Admin = true
+	cs2 := connect(t, opts)
+	names2 := toolNames(t, cs2)
+	if !names2["admin_list_users"] {
+		t.Error("admin read tool should register with JABALI_MCP_ADMIN")
+	}
+	if !names2["admin_run_updates"] {
+		t.Error("admin write tool should register with JABALI_MCP_ADMIN + write")
+	}
+
+	// Admin read-only (no write): admin write tools absent.
+	opts3 := newOpts(t, ts.URL, false)
+	opts3.Admin = true
+	cs3 := connect(t, opts3)
+	names3 := toolNames(t, cs3)
+	if !names3["admin_list_users"] {
+		t.Error("admin read tool should register in admin read-only mode")
+	}
+	if names3["admin_create_user"] {
+		t.Error("admin write tool must not register without write mode")
+	}
+}
+
 func firstText(res *mcp.CallToolResult) string {
 	for _, c := range res.Content {
 		if tc, ok := c.(*mcp.TextContent); ok {

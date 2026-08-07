@@ -114,6 +114,7 @@ and create one. The plaintext `jat_…` is shown once — copy it. Use a **non-a
 | `JABALI_CA_FILE` | | PEM bundle to trust a self-hosted panel CA |
 | `JABALI_MCP_ALLOW_WRITE` | | `1` to enable mutating tools (default: read-only) |
 | `JABALI_MCP_DRY_RUN` | | `1` to force every write to preview instead of act |
+| `JABALI_MCP_ADMIN` | | `1` to also expose the `/admin/*` tools (needs an admin token) |
 | `JABALI_PANELS_FILE` | | JSON array of panels for fleet mode (overrides the single-panel vars) |
 
 **3. Register it with your MCP client.** In every example below `jabali-mcp` is
@@ -245,6 +246,17 @@ Config resolution order: `JABALI_PANELS_FILE` → single-panel env
 (`JABALI_PANEL_URL` + `JABALI_API_TOKEN`) → the default `panels.json`. In a
 fleet, every tool takes an optional `panel` argument to pick one; omit it for the
 first (default) panel.
+
+## Admin tools (same binary, separate opt-in)
+
+The `/admin/*` operator surface (list/create users, read/update server settings,
+run panel updates) lives in the **same binary** but a **separate registration
+group**, exposed only with `JABALI_MCP_ADMIN=1`. It fronts whole-box operations —
+a far larger blast radius than the tenant tools — so it is deliberately opt-in and
+requires an **admin token** (the panel's `RequireAdmin` rejects a non-admin token
+with 403 regardless of the flag). Admin write tools still need `ALLOW_WRITE`, and
+`admin_run_updates` is confirm-gated. Give the admin server its own admin token;
+use tenant tokens for everything else.
 
 ## Auth model — inherits the panel's tenant isolation
 

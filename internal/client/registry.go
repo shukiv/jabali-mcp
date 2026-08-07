@@ -48,6 +48,7 @@ type Options struct {
 	Registry   *Registry
 	AllowWrite bool // enable mutating tools at all
 	DryRun     bool // force every write tool to preview instead of act
+	Admin      bool // additionally expose the /admin/* tools (needs an admin token)
 }
 
 // Get returns the named panel client, or the default when name is empty.
@@ -88,10 +89,14 @@ func (r *Registry) Default() string { return r.def }
 //	    enable mutating tools; otherwise the server is read-only.
 //	JABALI_MCP_DRY_RUN = 1|true
 //	    force every write tool to preview the request instead of sending it.
+//	JABALI_MCP_ADMIN = 1|true
+//	    also expose the /admin/* tools. They require an admin token — the panel's
+//	    RequireAdmin rejects a non-admin token with 403 regardless of this flag.
 func LoadOptions() (Options, error) {
 	var opts Options
 	opts.AllowWrite = envBool("JABALI_MCP_ALLOW_WRITE")
 	opts.DryRun = envBool("JABALI_MCP_DRY_RUN")
+	opts.Admin = envBool("JABALI_MCP_ADMIN")
 
 	if f := os.Getenv("JABALI_PANELS_FILE"); f != "" {
 		reg, err := loadPanelsFile(f)

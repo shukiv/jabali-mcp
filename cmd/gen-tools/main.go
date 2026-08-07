@@ -16,9 +16,10 @@ func main() {
 	spec := flag.String("spec", "openapi/openapi.yaml", "path to the OpenAPI spec")
 	curation := flag.String("curation", "openapi/tools.yaml", "path to the curation file")
 	out := flag.String("out", "internal/tools/generated.go", "output Go file")
+	group := flag.String("group", "", `registration group: "" for tenant, "Admin" for admin`)
 	flag.Parse()
 
-	src, err := gen.Generate(*spec, *curation)
+	src, err := gen.Generate(*spec, *curation, *group)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "gen-tools:", err)
 		os.Exit(1)

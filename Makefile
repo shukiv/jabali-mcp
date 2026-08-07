@@ -9,6 +9,7 @@ build:
 
 gen:
 	go run ./cmd/gen-tools -spec openapi/openapi.yaml -curation openapi/tools.yaml -out internal/tools/generated.go
+	go run ./cmd/gen-tools -spec openapi/openapi.yaml -curation openapi/admin-tools.yaml -out internal/tools/generated_admin.go -group Admin
 
 test:
 	go test -race ./...
