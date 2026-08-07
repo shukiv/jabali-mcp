@@ -1,0 +1,14 @@
+{
+  "$schema": "https://context7.com/schema/context7.json",
+  "projectTitle": "Jabali MCP",
+  "description": "MCP server exposing the Jabali Panel hosting control panel REST API as AI-assistant tools — domains, DNS, SSL, mail, databases, backups, cron, diagnostics.",
+  "folders": [],
+  "excludeFolders": ["internal", "cmd", "scripts", "openapi", ".github"],
+  "excludeFiles": ["HANDOVER.md", "LICENSE", "go.sum"],
+  "rules": [
+    "Start read-only; enable writes with JABALI_MCP_ALLOW_WRITE=1 only when needed",
+    "Destructive tools act only when re-called with confirm: true",
+    "Use a tenant (non-admin) API token unless the task requires admin",
+    "Never disable TLS verification; add a private CA via JABALI_CA_FILE"
+  ]
+}
