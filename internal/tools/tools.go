@@ -39,6 +39,7 @@ func Register(s *mcp.Server, opts client.Options) {
 	globalDryRun = opts.DryRun
 	reg := opts.Registry
 	registerRead(s, reg)
+	registerComposite(s, reg)
 	if opts.AllowWrite {
 		registerWrite(s, reg)
 	}

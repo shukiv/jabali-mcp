@@ -310,7 +310,9 @@ verification.
 `get_cron_log`, `list_app_catalog`, `get_application`, `get_database`,
 `list_database_users`, `get_mailbox`, `get_autoresponder`,
 `get_backup_manifest`, `list_ssh_keys`, `get_php_settings`,
-`list_php_versions`, `list_files`, `preview_file`.
+`list_php_versions`, `list_files`, `preview_file` — plus the composite
+`diagnose_domain` (config + SSL + DNS + recent errors + bandwidth in one
+answer; a failed probe is reported without failing the rest).
 
 > `preview_file` reads file contents (up to 1 MiB) into the conversation — that
 > can include secrets such as `wp-config.php`. `create_database_user` and the
