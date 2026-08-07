@@ -41,6 +41,7 @@ func Register(s *mcp.Server, opts client.Options) {
 	reg := opts.Registry
 	registerRead(s, reg)
 	registerComposite(s, reg)
+	registerIssueTools(s, reg, opts.AllowWrite)
 	if opts.AllowWrite {
 		registerWrite(s, reg)
 	}
@@ -101,7 +102,7 @@ func runRead[In any](ctx context.Context, reg *client.Registry, in In, spec reqS
 	if err != nil {
 		return errResult(err.Error()), nil, nil
 	}
-	return exec(ctx, c, spec)
+	return execReq(ctx, c, spec)
 }
 
 // runWrite executes a mutating request. Order:
@@ -127,7 +128,7 @@ func runWrite[In any](ctx context.Context, reg *client.Registry, in In, gated bo
 	if err != nil {
 		return errResult(err.Error()), nil, nil
 	}
-	return exec(ctx, c, spec)
+	return execReq(ctx, c, spec)
 }
 
 // describeReq renders a request for a dry-run preview.
@@ -141,7 +142,7 @@ func describeReq(spec reqSpec) string {
 	return s
 }
 
-func exec(ctx context.Context, c *client.Client, spec reqSpec) (*mcp.CallToolResult, any, error) {
+func execReq(ctx context.Context, c *client.Client, spec reqSpec) (*mcp.CallToolResult, any, error) {
 	raw, status, err := c.Do(ctx, spec.method, spec.path, spec.body)
 	if err != nil {
 		return errResult(err.Error()), nil, nil

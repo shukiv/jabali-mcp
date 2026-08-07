@@ -272,6 +272,12 @@ Remaining:
 - CLI mode (tools as subcommands for SSH-only users).
 - MCP resources/prompts: expose panel runbooks as resources, canned prompts.
 
+Done in v0.4.0: `report_issue` (hand-written, internal/tools/issues.go) —
+drafts GitHub issues for jabali-panel/jabali-mcp as prefilled issues/new
+links; write mode + `confirm: true` files directly via the gh CLI. Repo list
+is a closed enum (injection guard), secret-pattern tripwire on the text,
+read-only servers never create anything.
+
 Public release: DONE (2026-08-07) — repo public, tagged releases build
 binaries via `.github/workflows/release.yml`, GOPRIVATE dropped everywhere.
 

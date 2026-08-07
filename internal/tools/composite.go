@@ -19,6 +19,43 @@ import (
 // maxProbeErrBody caps how much of an upstream error body a probe error keeps.
 const maxProbeErrBody = 500
 
+// runDomainProbes performs the diagnose_domain probes against one panel and
+// returns successful results keyed by probe name plus per-probe errors. Shared
+// with report_issue, which attaches the results to a bug report.
+func runDomainProbes(ctx context.Context, c *client.Client, domainID string, lines int) (map[string]any, map[string]string) {
+	out := map[string]any{}
+	probeErrs := map[string]string{}
+	probe := func(key, path string) (status int) {
+		raw, status, err := c.Do(ctx, "GET", path, nil)
+		switch {
+		case err != nil:
+			probeErrs[key] = err.Error()
+		case status < 200 || status >= 300:
+			body := string(raw)
+			if len(body) > maxProbeErrBody {
+				body = body[:maxProbeErrBody] + "…"
+			}
+			probeErrs[key] = fmt.Sprintf("HTTP %d: %s", status, body)
+		default:
+			out[key] = json.RawMessage(raw)
+		}
+		return status
+	}
+
+	id := url.PathEscape(domainID)
+	probe("domain", "/domains/"+id)
+	if st := probe("ssl", "/domains/"+id+"/ssl"); st == 404 {
+		// No certificate is a diagnosis, not a probe failure.
+		delete(probeErrs, "ssl")
+		out["ssl"] = json.RawMessage(`{"status":"none","note":"no certificate provisioned"}`)
+	}
+	probe("dns_records", "/domains/"+id+"/dns/records")
+	probe("bandwidth", "/domains/"+id+"/bandwidth")
+	probe("recent_errors", "/logs/tail?domain_id="+url.QueryEscape(domainID)+
+		"&log_type=error&lines="+strconv.Itoa(lines))
+	return out, probeErrs
+}
+
 func registerComposite(s *mcp.Server, reg *client.Registry) {
 	type DiagnoseDomainIn struct {
 		panelArg
@@ -45,37 +82,7 @@ func registerComposite(s *mcp.Server, reg *client.Registry) {
 				lines = 500
 			}
 
-			out := map[string]any{}
-			probeErrs := map[string]string{}
-			probe := func(key, path string) (status int) {
-				raw, status, err := c.Do(ctx, "GET", path, nil)
-				switch {
-				case err != nil:
-					probeErrs[key] = err.Error()
-				case status < 200 || status >= 300:
-					body := string(raw)
-					if len(body) > maxProbeErrBody {
-						body = body[:maxProbeErrBody] + "…"
-					}
-					probeErrs[key] = fmt.Sprintf("HTTP %d: %s", status, body)
-				default:
-					out[key] = json.RawMessage(raw)
-				}
-				return status
-			}
-
-			id := url.PathEscape(in.DomainId)
-			probe("domain", "/domains/"+id)
-			if st := probe("ssl", "/domains/"+id+"/ssl"); st == 404 {
-				// No certificate is a diagnosis, not a probe failure.
-				delete(probeErrs, "ssl")
-				out["ssl"] = json.RawMessage(`{"status":"none","note":"no certificate provisioned"}`)
-			}
-			probe("dns_records", "/domains/"+id+"/dns/records")
-			probe("bandwidth", "/domains/"+id+"/bandwidth")
-			probe("recent_errors", "/logs/tail?domain_id="+url.QueryEscape(in.DomainId)+
-				"&log_type=error&lines="+strconv.Itoa(lines))
-
+			out, probeErrs := runDomainProbes(ctx, c, in.DomainId, lines)
 			if len(probeErrs) > 0 {
 				out["probe_errors"] = probeErrs
 			}

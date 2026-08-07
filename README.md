@@ -314,7 +314,10 @@ Full per-tool reference with arguments and constraints: **[docs/TOOLS.md](docs/T
 `get_backup_manifest`, `list_ssh_keys`, `get_php_settings`,
 `list_php_versions`, `list_files`, `preview_file` — plus the composite
 `diagnose_domain` (config + SSL + DNS + recent errors + bandwidth in one
-answer; a failed probe is reported without failing the rest).
+answer; a failed probe is reported without failing the rest) and
+`report_issue` (draft a bug report / feature request for the jabali-panel or
+jabali-mcp GitHub repo as a prefilled link; in write mode it can also file it
+directly via `gh`, gated by `confirm: true`).
 
 > `preview_file` reads file contents (up to 1 MiB) into the conversation — that
 > can include secrets such as `wp-config.php`. `create_database_user` and the

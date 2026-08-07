@@ -11,11 +11,11 @@ import (
 	"strings"
 )
 
-// compositeDocs documents the hand-written tools in internal/tools/composite.go.
-// Keep in step when adding a composite tool; the coverage test enforces it.
-const compositeDocs = `## Composite tools (hand-written)
+// compositeDocs documents the hand-written tools (internal/tools/composite.go
+// and issues.go). Keep in step when adding one; the coverage test enforces it.
+const compositeDocs = `## Hand-written tools
 
-Read-only aggregations over the same REST surface; always registered.
+Always registered alongside the generated read tools.
 
 ### diagnose_domain
 
@@ -29,6 +29,29 @@ reported under ` + "`probe_errors`" + ` without failing the rest; an SSL 404 map
 | ` + "`panel`" + ` | string | | target panel name for fleet mode; omit to use the default panel |
 | ` + "`domain_id`" + ` | string | ✓ | the domain's ULID |
 | ` + "`error_lines`" + ` | integer | | trailing nginx error-log lines to include (default 50, max 500) |
+
+### report_issue
+
+Draft or file a GitHub issue (bug report or feature request) on
+[jabali-panel](https://github.com/shukiv/jabali-panel/issues) or
+[jabali-mcp](https://github.com/shukiv/jabali-mcp/issues). In read-only mode it
+only returns a prefilled ` + "`issues/new`" + ` link for the user to review and submit.
+In write mode, direct creation via the ` + "`gh`" + ` CLI additionally requires
+` + "`confirm: true`" + ` (it posts under the user's GitHub identity); ` + "`dry_run`" + ` previews.
+Text containing panel/GitHub token patterns is refused. Set
+` + "`diagnose_domain_id`" + ` to auto-attach the ` + "`diagnose_domain`" + ` probe results as
+evidence.
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| ` + "`panel`" + ` | string | | target panel name for fleet mode; omit to use the default panel |
+| ` + "`repo`" + ` | string | ✓ | one of: jabali-panel (panel/API behavior), jabali-mcp (MCP tool problems) |
+| ` + "`kind`" + ` | string | ✓ | one of: bug, feature |
+| ` + "`title`" + ` | string | ✓ | one-line issue title |
+| ` + "`body`" + ` | string | ✓ | markdown body — never include tokens, passwords, or file contents |
+| ` + "`diagnose_domain_id`" + ` | string | | domain ULID: attach diagnose_domain results (config, SSL, DNS, recent errors) |
+| ` + "`confirm`" + ` | boolean | | create directly via gh (write mode only) |
+| ` + "`dry_run`" + ` | boolean | | preview only |
 `
 
 // GenerateDocs renders the full tool reference as markdown.
