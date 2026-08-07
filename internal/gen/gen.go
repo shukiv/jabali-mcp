@@ -101,6 +101,7 @@ type toolModel struct {
 	Destructive bool
 	Paginated   bool
 	PathParams  []field
+	QueryParams []field
 	BodyFields  []field
 }
 
@@ -188,17 +189,29 @@ func buildModel(spec *oapiSpec, ct curatedTool) (toolModel, error) {
 	}
 
 	for _, p := range op.Parameters {
-		if p.In != "path" {
-			continue
+		switch p.In {
+		case "path":
+			jsonName := pathParamName(path, p.Name)
+			m.PathParams = append(m.PathParams, field{
+				JSONName: jsonName,
+				GoName:   camel(jsonName),
+				GoType:   "string",
+				Required: true,
+				Desc:     "the " + strings.TrimSuffix(jsonName, "_id") + "'s ULID",
+			})
+		case "query":
+			m.QueryParams = append(m.QueryParams, field{
+				JSONName: p.Name,
+				GoName:   camel(p.Name),
+				GoType:   goType(p.Schema, p.Required),
+				Required: p.Required,
+				Desc:     firstNonEmpty(propDesc(p.Schema), strings.ReplaceAll(p.Name, "_", " ")),
+				Enum:     p.Schema.Enum,
+				Min:      p.Schema.Minimum,
+				Max:      p.Schema.Maximum,
+				MinLen:   p.Schema.MinLength,
+			})
 		}
-		jsonName := pathParamName(path, p.Name)
-		m.PathParams = append(m.PathParams, field{
-			JSONName: jsonName,
-			GoName:   camel(jsonName),
-			GoType:   "string",
-			Required: true,
-			Desc:     "the " + strings.TrimSuffix(jsonName, "_id") + "'s ULID",
-		})
 	}
 
 	if op.RequestBody != nil {
@@ -318,12 +331,17 @@ func firstNonEmpty(a, b string) string {
 // ---- Emit ----
 
 func emit(specFile, curFile, group string, models []toolModel) []byte {
-	// net/url is only needed when a tool escapes a path parameter.
-	usesURL := false
+	// net/url is needed when a tool escapes a path parameter or builds a query
+	// string; strconv when a query parameter is a non-string type.
+	usesURL, usesStrconv := false, false
 	for _, m := range models {
-		if len(m.PathParams) > 0 {
+		if len(m.PathParams) > 0 || len(m.QueryParams) > 0 {
 			usesURL = true
-			break
+		}
+		for _, q := range m.QueryParams {
+			if q.GoType != "string" {
+				usesStrconv = true
+			}
 		}
 	}
 
@@ -333,6 +351,9 @@ func emit(specFile, curFile, group string, models []toolModel) []byte {
 	b.WriteString("import (\n\t\"context\"\n\t\"net/http\"\n")
 	if usesURL {
 		b.WriteString("\t\"net/url\"\n")
+	}
+	if usesStrconv {
+		b.WriteString("\t\"strconv\"\n")
 	}
 	b.WriteString("\n\t\"github.com/modelcontextprotocol/go-sdk/mcp\"\n\n")
 	b.WriteString("\t\"github.com/shukiv/jabali-mcp/internal/client\"\n)\n\n")
@@ -367,6 +388,13 @@ func emitTool(b *strings.Builder, m toolModel) {
 	for _, f := range m.PathParams {
 		fmt.Fprintf(b, "\t\t\t%s %s `json:%q jsonschema:%q`\n", f.GoName, f.GoType, f.JSONName, f.Desc)
 	}
+	for _, f := range m.QueryParams {
+		tag := f.JSONName
+		if !f.Required {
+			tag += ",omitempty"
+		}
+		fmt.Fprintf(b, "\t\t\t%s %s `json:%q jsonschema:%q`\n", f.GoName, f.GoType, tag, f.Desc)
+	}
 	if m.Paginated {
 		b.WriteString("\t\t\tPage int `json:\"page,omitempty\" jsonschema:\"page number (1-based)\"`\n")
 		b.WriteString("\t\t\tPageSize int `json:\"page_size,omitempty\" jsonschema:\"results per page\"`\n")
@@ -398,6 +426,13 @@ func emitTool(b *strings.Builder, m toolModel) {
 	if m.Paginated {
 		b.WriteString("\t\t\t\tpath += listQuery(in.Page, in.PageSize, in.Q)\n")
 	}
+	if len(m.QueryParams) > 0 {
+		b.WriteString("\t\t\t\tq := url.Values{}\n")
+		for _, f := range m.QueryParams {
+			emitQueryAssign(b, f)
+		}
+		b.WriteString("\t\t\t\tif enc := q.Encode(); enc != \"\" {\n\t\t\t\t\tpath += \"?\" + enc\n\t\t\t\t}\n")
+	}
 
 	bodyExpr := "nil"
 	if len(m.BodyFields) > 0 {
@@ -426,7 +461,8 @@ func emitTool(b *strings.Builder, m toolModel) {
 // fast with a precise message before any request is sent. Optional fields are
 // checked only when the caller supplied a value.
 func emitValidate(b *strings.Builder, m toolModel) {
-	for _, f := range m.BodyFields {
+	fields := append(append([]field{}, m.BodyFields...), m.QueryParams...)
+	for _, f := range fields {
 		if len(f.Enum) == 0 && f.Min == nil && f.Max == nil && f.MinLen == nil {
 			continue
 		}
@@ -474,6 +510,37 @@ func quoteList(vals []string) string {
 		parts[i] = fmt.Sprintf("%q", v)
 	}
 	return strings.Join(parts, ", ")
+}
+
+// emitQueryAssign adds a query parameter to url.Values, converting to string and
+// (for optional fields) skipping the zero value.
+func emitQueryAssign(b *strings.Builder, f field) {
+	var val string
+	switch f.GoType {
+	case "int":
+		val = "strconv.Itoa(in." + f.GoName + ")"
+	case "float64":
+		val = "strconv.FormatFloat(in." + f.GoName + ", 'f', -1, 64)"
+	case "bool":
+		val = "strconv.FormatBool(in." + f.GoName + ")"
+	case "*bool":
+		fmt.Fprintf(b, "\t\t\t\tif in.%s != nil { q.Set(%q, strconv.FormatBool(*in.%s)) }\n", f.GoName, f.JSONName, f.GoName)
+		return
+	default:
+		val = "in." + f.GoName
+	}
+	if f.Required {
+		fmt.Fprintf(b, "\t\t\t\tq.Set(%q, %s)\n", f.JSONName, val)
+		return
+	}
+	switch f.GoType {
+	case "string":
+		fmt.Fprintf(b, "\t\t\t\tif in.%s != \"\" { q.Set(%q, %s) }\n", f.GoName, f.JSONName, val)
+	case "int", "float64":
+		fmt.Fprintf(b, "\t\t\t\tif in.%s != 0 { q.Set(%q, %s) }\n", f.GoName, f.JSONName, val)
+	default:
+		fmt.Fprintf(b, "\t\t\t\tq.Set(%q, %s)\n", f.JSONName, val)
+	}
 }
 
 func emitBodyAssign(b *strings.Builder, f field) {

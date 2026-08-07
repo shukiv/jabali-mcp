@@ -23,6 +23,8 @@ tools:
   - { op: "GET /databases",                  name: list_databases,    group: read, paginated: true }
   - { op: "GET /me/backups",                 name: list_backups,      group: read, paginated: true }
   - { op: "GET /me/api-tokens",              name: list_api_tokens,   group: read, paginated: true }
+  - { op: "GET /mail/logs",                  name: list_mail_logs,    group: read }
+  - { op: "GET /logs/tail",                  name: tail_web_log,      group: read }
 
   # --- Write (additive) ---
   - { op: "POST /domains",                   name: create_domain,     group: write }

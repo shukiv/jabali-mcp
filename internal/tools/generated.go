@@ -6,6 +6,7 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"strconv"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -124,6 +125,69 @@ func registerRead(s *mcp.Server, reg *client.Registry) {
 			func(ctx context.Context, _ *mcp.CallToolRequest, in ListApiTokensIn) (*mcp.CallToolResult, any, error) {
 				path := "/me/api-tokens"
 				path += listQuery(in.Page, in.PageSize, in.Q)
+				return runRead(ctx, reg, in, reqSpec{http.MethodGet, path, nil})
+			})
+	}
+	{
+		type ListMailLogsIn struct {
+			panelArg
+			Limit     int    `json:"limit,omitempty" jsonschema:"max entries"`
+			Offset    int    `json:"offset,omitempty" jsonschema:"offset"`
+			Sender    string `json:"sender,omitempty" jsonschema:"filter by sender address"`
+			Recipient string `json:"recipient,omitempty" jsonschema:"filter by recipient address"`
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "list_mail_logs", Description: "List recent mail log entries for your domains (delivered/failed/queued)", Annotations: roAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in ListMailLogsIn) (*mcp.CallToolResult, any, error) {
+				path := "/mail/logs"
+				q := url.Values{}
+				if in.Limit != 0 {
+					q.Set("limit", strconv.Itoa(in.Limit))
+				}
+				if in.Offset != 0 {
+					q.Set("offset", strconv.Itoa(in.Offset))
+				}
+				if in.Sender != "" {
+					q.Set("sender", in.Sender)
+				}
+				if in.Recipient != "" {
+					q.Set("recipient", in.Recipient)
+				}
+				if enc := q.Encode(); enc != "" {
+					path += "?" + enc
+				}
+				return runRead(ctx, reg, in, reqSpec{http.MethodGet, path, nil})
+			})
+	}
+	{
+		type TailWebLogIn struct {
+			panelArg
+			DomainId string `json:"domain_id" jsonschema:"the domain's ULID"`
+			LogType  string `json:"log_type" jsonschema:"one of: access, error"`
+			Lines    int    `json:"lines,omitempty" jsonschema:"how many trailing lines"`
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "tail_web_log", Description: "Tail a domain's nginx access or error log (last N lines, snapshot)", Annotations: roAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in TailWebLogIn) (*mcp.CallToolResult, any, error) {
+				if r := vEnum("log_type", in.LogType, []string{"access", "error"}); r != nil {
+					return r, nil, nil
+				}
+				if in.Lines != 0 {
+					if r := vMin("lines", in.Lines, 1); r != nil {
+						return r, nil, nil
+					}
+					if r := vMax("lines", in.Lines, 2000); r != nil {
+						return r, nil, nil
+					}
+				}
+				path := "/logs/tail"
+				q := url.Values{}
+				q.Set("domain_id", in.DomainId)
+				q.Set("log_type", in.LogType)
+				if in.Lines != 0 {
+					q.Set("lines", strconv.Itoa(in.Lines))
+				}
+				if enc := q.Encode(); enc != "" {
+					path += "?" + enc
+				}
 				return runRead(ctx, reg, in, reqSpec{http.MethodGet, path, nil})
 			})
 	}
