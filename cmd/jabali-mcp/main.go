@@ -27,8 +27,9 @@ import (
 	"github.com/shukiv/jabali-mcp/internal/tools"
 )
 
-// version is set at build time via -ldflags "-X main.version=...".
-var version = "0.1.0-dev"
+// version is set at build time via -ldflags "-X main.version=..."; the default
+// tracks the latest release tag for `go run …@vX.Y.Z` (which doesn't ldflag).
+var version = "0.1.0"
 
 func main() {
 	if len(os.Args) > 1 {
