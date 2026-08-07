@@ -165,7 +165,11 @@ func registerRead(s *mcp.Server, reg *client.Registry) {
 			LogType  string `json:"log_type" jsonschema:"one of: access, error"`
 			Lines    int    `json:"lines,omitempty" jsonschema:"how many trailing lines"`
 		}
-		mcp.AddTool(s, &mcp.Tool{Name: "tail_web_log", Description: "Tail a domain's nginx access or error log (last N lines, snapshot)", Annotations: roAnno()},
+		schema := inferSchema[TailWebLogIn]()
+		schema.Properties["log_type"].Enum = enumVals("access", "error")
+		schema.Properties["lines"].Minimum = f64(1)
+		schema.Properties["lines"].Maximum = f64(2000)
+		mcp.AddTool(s, &mcp.Tool{Name: "tail_web_log", Description: "Tail a domain's nginx access or error log (last N lines, snapshot)", Annotations: roAnno(), InputSchema: schema},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in TailWebLogIn) (*mcp.CallToolResult, any, error) {
 				if r := vEnum("log_type", in.LogType, []string{"access", "error"}); r != nil {
 					return r, nil, nil
@@ -297,7 +301,10 @@ func registerRead(s *mcp.Server, reg *client.Registry) {
 			CronId string `json:"cron_id" jsonschema:"the cron's ULID"`
 			Lines  int    `json:"lines,omitempty" jsonschema:"trailing lines to return (default 50)"`
 		}
-		mcp.AddTool(s, &mcp.Tool{Name: "get_cron_log", Description: "Read a cron job's recent log output", Annotations: roAnno()},
+		schema := inferSchema[GetCronLogIn]()
+		schema.Properties["lines"].Minimum = f64(1)
+		schema.Properties["lines"].Maximum = f64(500)
+		mcp.AddTool(s, &mcp.Tool{Name: "get_cron_log", Description: "Read a cron job's recent log output", Annotations: roAnno(), InputSchema: schema},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in GetCronLogIn) (*mcp.CallToolResult, any, error) {
 				if in.Lines != 0 {
 					if r := vMin("lines", in.Lines, 1); r != nil {
@@ -356,7 +363,11 @@ func registerRead(s *mcp.Server, reg *client.Registry) {
 			Page     int `json:"page,omitempty" jsonschema:"page number (1-based)"`
 			PageSize int `json:"page_size,omitempty" jsonschema:"results per page (default 20)"`
 		}
-		mcp.AddTool(s, &mcp.Tool{Name: "list_database_users", Description: "List your database users", Annotations: roAnno()},
+		schema := inferSchema[ListDatabaseUsersIn]()
+		schema.Properties["page"].Minimum = f64(1)
+		schema.Properties["page_size"].Minimum = f64(1)
+		schema.Properties["page_size"].Maximum = f64(200)
+		mcp.AddTool(s, &mcp.Tool{Name: "list_database_users", Description: "List your database users", Annotations: roAnno(), InputSchema: schema},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in ListDatabaseUsersIn) (*mcp.CallToolResult, any, error) {
 				if in.Page != 0 {
 					if r := vMin("page", in.Page, 1); r != nil {
@@ -510,7 +521,10 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 			TempUrlEnabled  *bool  `json:"temp_url_enabled,omitempty" jsonschema:"Toggle the preview (temp) URL for this domain."`
 			WebmailEnabled  *bool  `json:"webmail_enabled,omitempty" jsonschema:"Toggle the webmail subdomain for this domain."`
 		}
-		mcp.AddTool(s, &mcp.Tool{Name: "update_domain", Description: "Update a domain's settings (partial — absent fields are left untouched)", Annotations: additiveAnno()},
+		schema := inferSchema[UpdateDomainIn]()
+		schema.Properties["redirect_all_type"].Enum = enumVals("301", "302", "307", "308")
+		schema.Properties["ssl_mode"].Enum = enumVals("le", "self", "none")
+		mcp.AddTool(s, &mcp.Tool{Name: "update_domain", Description: "Update a domain's settings (partial — absent fields are left untouched)", Annotations: additiveAnno(), InputSchema: schema},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in UpdateDomainIn) (*mcp.CallToolResult, any, error) {
 				if in.RedirectAllType != "" {
 					if r := vEnum("redirect_all_type", in.RedirectAllType, []string{"301", "302", "307", "308"}); r != nil {
@@ -556,7 +570,9 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 			Ttl      int    `json:"ttl,omitempty" jsonschema:"Omit to use server-wide default (Server Settings → DNS)."`
 			Type     string `json:"type" jsonschema:"one of: A, AAAA, CNAME, MX, TXT, SRV, CAA, NS"`
 		}
-		mcp.AddTool(s, &mcp.Tool{Name: "create_dns_record", Description: "Create a record", Annotations: additiveAnno()},
+		schema := inferSchema[CreateDnsRecordIn]()
+		schema.Properties["type"].Enum = enumVals("A", "AAAA", "CNAME", "MX", "TXT", "SRV", "CAA", "NS")
+		mcp.AddTool(s, &mcp.Tool{Name: "create_dns_record", Description: "Create a record", Annotations: additiveAnno(), InputSchema: schema},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in CreateDnsRecordIn) (*mcp.CallToolResult, any, error) {
 				if r := vEnum("type", in.Type, []string{"A", "AAAA", "CNAME", "MX", "TXT", "SRV", "CAA", "NS"}); r != nil {
 					return r, nil, nil
@@ -613,7 +629,9 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 			Password  string `json:"password" jsonschema:"password"`
 			QuotaMb   int    `json:"quota_mb" jsonschema:"e.g. 1024"`
 		}
-		mcp.AddTool(s, &mcp.Tool{Name: "create_mailbox", Description: "create_mailbox", Annotations: additiveAnno()},
+		schema := inferSchema[CreateMailboxIn]()
+		schema.Properties["password"].MinLength = iptr(12)
+		mcp.AddTool(s, &mcp.Tool{Name: "create_mailbox", Description: "create_mailbox", Annotations: additiveAnno(), InputSchema: schema},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in CreateMailboxIn) (*mcp.CallToolResult, any, error) {
 				if r := vMinLen("password", in.Password, 12); r != nil {
 					return r, nil, nil
@@ -662,7 +680,9 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 			Kind     string `json:"kind" jsonschema:"one of: wordpress, joomla, drupal, moodle, ghost, opencart, prestashop, magento, drupal10, mediawiki, nextcloud, mautic, suitecrm, dolibarr, processmaker"`
 			Path     string `json:"path,omitempty" jsonschema:"Install path under doc-root."`
 		}
-		mcp.AddTool(s, &mcp.Tool{Name: "install_application", Description: "Install an app (WordPress, Joomla, etc.)", Annotations: additiveAnno()},
+		schema := inferSchema[InstallApplicationIn]()
+		schema.Properties["kind"].Enum = enumVals("wordpress", "joomla", "drupal", "moodle", "ghost", "opencart", "prestashop", "magento", "drupal10", "mediawiki", "nextcloud", "mautic", "suitecrm", "dolibarr", "processmaker")
+		mcp.AddTool(s, &mcp.Tool{Name: "install_application", Description: "Install an app (WordPress, Joomla, etc.)", Annotations: additiveAnno(), InputSchema: schema},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in InstallApplicationIn) (*mcp.CallToolResult, any, error) {
 				if r := vEnum("kind", in.Kind, []string{"wordpress", "joomla", "drupal", "moodle", "ghost", "opencart", "prestashop", "magento", "drupal10", "mediawiki", "nextcloud", "mautic", "suitecrm", "dolibarr", "processmaker"}); r != nil {
 					return r, nil, nil
@@ -684,7 +704,9 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 			Engine string `json:"engine" jsonschema:"one of: mysql, postgres"`
 			Name   string `json:"name" jsonschema:"e.g. myapp_prod"`
 		}
-		mcp.AddTool(s, &mcp.Tool{Name: "create_database", Description: "Create a database", Annotations: additiveAnno()},
+		schema := inferSchema[CreateDatabaseIn]()
+		schema.Properties["engine"].Enum = enumVals("mysql", "postgres")
+		mcp.AddTool(s, &mcp.Tool{Name: "create_database", Description: "Create a database", Annotations: additiveAnno(), InputSchema: schema},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in CreateDatabaseIn) (*mcp.CallToolResult, any, error) {
 				if r := vEnum("engine", in.Engine, []string{"mysql", "postgres"}); r != nil {
 					return r, nil, nil
@@ -797,7 +819,9 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 			DatabaseId     string `json:"database_id" jsonschema:"the database's ULID"`
 			GrantLevel     string `json:"grant_level" jsonschema:"rw = read-write, ro = read-only"`
 		}
-		mcp.AddTool(s, &mcp.Tool{Name: "grant_database_access", Description: "Grant a database user access to one of your databases", Annotations: additiveAnno()},
+		schema := inferSchema[GrantDatabaseAccessIn]()
+		schema.Properties["grant_level"].Enum = enumVals("rw", "ro")
+		mcp.AddTool(s, &mcp.Tool{Name: "grant_database_access", Description: "Grant a database user access to one of your databases", Annotations: additiveAnno(), InputSchema: schema},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in GrantDatabaseAccessIn) (*mcp.CallToolResult, any, error) {
 				if r := vEnum("grant_level", in.GrantLevel, []string{"rw", "ro"}); r != nil {
 					return r, nil, nil
@@ -819,7 +843,9 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 			QuotaBytes  int    `json:"quota_bytes,omitempty" jsonschema:"mailbox quota in bytes (min 16 MiB)"`
 			SendOnly    *bool  `json:"send_only,omitempty" jsonschema:"mailbox may send but not receive"`
 		}
-		mcp.AddTool(s, &mcp.Tool{Name: "update_mailbox", Description: "Update a mailbox (partial — absent fields are left untouched)", Annotations: additiveAnno()},
+		schema := inferSchema[UpdateMailboxIn]()
+		schema.Properties["quota_bytes"].Minimum = f64(16777216)
+		mcp.AddTool(s, &mcp.Tool{Name: "update_mailbox", Description: "Update a mailbox (partial — absent fields are left untouched)", Annotations: additiveAnno(), InputSchema: schema},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in UpdateMailboxIn) (*mcp.CallToolResult, any, error) {
 				if in.QuotaBytes != 0 {
 					if r := vMin("quota_bytes", in.QuotaBytes, 16777216); r != nil {
@@ -907,7 +933,14 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 			PhpUploadMaxFilesize string `json:"php_upload_max_filesize,omitempty" jsonschema:"digits + optional K/M/G suffix, e.g. 64M"`
 			PhpVersion           string `json:"php_version,omitempty" jsonschema:"e.g. 8.3 — must be installed on the server (see list_php_versions); changes the pool shared by ALL your domains"`
 		}
-		mcp.AddTool(s, &mcp.Tool{Name: "update_php_settings", Description: "Update a domain's PHP settings (partial — absent fields are left untouched)", Annotations: additiveAnno()},
+		schema := inferSchema[UpdatePhpSettingsIn]()
+		schema.Properties["php_max_execution_time"].Minimum = f64(1)
+		schema.Properties["php_max_execution_time"].Maximum = f64(86400)
+		schema.Properties["php_max_input_time"].Minimum = f64(1)
+		schema.Properties["php_max_input_time"].Maximum = f64(86400)
+		schema.Properties["php_max_input_vars"].Minimum = f64(1)
+		schema.Properties["php_max_input_vars"].Maximum = f64(86400)
+		mcp.AddTool(s, &mcp.Tool{Name: "update_php_settings", Description: "Update a domain's PHP settings (partial — absent fields are left untouched)", Annotations: additiveAnno(), InputSchema: schema},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in UpdatePhpSettingsIn) (*mcp.CallToolResult, any, error) {
 				if in.PhpMaxExecutionTime != 0 {
 					if r := vMin("php_max_execution_time", in.PhpMaxExecutionTime, 1); r != nil {
@@ -1009,7 +1042,9 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 			MailboxId string `json:"mailbox_id" jsonschema:"the mailbox's ULID"`
 			Password  string `json:"password" jsonschema:"password"`
 		}
-		mcp.AddTool(s, &mcp.Tool{Name: "set_mailbox_password", Description: "Change mailbox password", Annotations: destructiveAnno()},
+		schema := inferSchema[SetMailboxPasswordIn]()
+		schema.Properties["password"].MinLength = iptr(12)
+		mcp.AddTool(s, &mcp.Tool{Name: "set_mailbox_password", Description: "Change mailbox password", Annotations: destructiveAnno(), InputSchema: schema},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in SetMailboxPasswordIn) (*mcp.CallToolResult, any, error) {
 				if r := vMinLen("password", in.Password, 12); r != nil {
 					return r, nil, nil

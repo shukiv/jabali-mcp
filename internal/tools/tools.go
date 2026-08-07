@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/shukiv/jabali-mcp/internal/client"
@@ -210,6 +211,33 @@ func listQuery(page, pageSize int, q string) string {
 		return ""
 	}
 	return "?" + v.Encode()
+}
+
+// Schema helpers for the generated tools: infer the SDK's schema for the input
+// struct, then let the generator graft on the value constraints (enum/min/max/
+// minLength) the OpenAPI spec declares, so MCP clients see them in tools/list
+// and the SDK enforces them before the handler runs. The runtime v* validators
+// above stay as defense-in-depth.
+
+func inferSchema[T any]() *jsonschema.Schema {
+	s, err := jsonschema.For[T](&jsonschema.ForOptions{})
+	if err != nil {
+		// Registration-time and deterministic: a failure here is a generator bug.
+		panic(fmt.Sprintf("infer schema: %v", err))
+	}
+	return s
+}
+
+func f64(v int) *float64 { f := float64(v); return &f }
+
+func iptr(v int) *int { return &v }
+
+func enumVals(vs ...string) []any {
+	out := make([]any, len(vs))
+	for i, v := range vs {
+		out[i] = v
+	}
+	return out
 }
 
 // readonly / destructive annotation helpers.

@@ -245,6 +245,9 @@ func TestInputValidationRejectsBeforePanel(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	// Constraint violations are rejected by the SDK against the enriched
+	// InputSchema — CallTool fails at the protocol level, before the handler
+	// (and its runtime validators, which remain as defense-in-depth) ever runs.
 	cases := []struct {
 		name string
 		args map[string]any
@@ -253,22 +256,18 @@ func TestInputValidationRejectsBeforePanel(t *testing.T) {
 		{
 			name: "create_dns_record",
 			args: map[string]any{"domain_id": "01D", "name": "vpn", "type": "BOGUS", "content": "1.2.3.4"},
-			want: "must be one of",
+			want: "BOGUS does not equal any of",
 		},
 		{
 			name: "create_mailbox",
 			args: map[string]any{"domain_id": "01D", "local_part": "alice", "password": "short", "quota_mb": 1024},
-			want: "at least 12 characters",
+			want: "minLength",
 		},
 	}
 	for _, tc := range cases {
-		res, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: tc.name, Arguments: tc.args})
-		if err != nil {
-			t.Fatalf("%s: %v", tc.name, err)
-		}
-		if !res.IsError || !strings.Contains(firstText(res), tc.want) {
-			t.Errorf("%s: expected validation error containing %q, got IsError=%v %q",
-				tc.name, tc.want, res.IsError, firstText(res))
+		_, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: tc.name, Arguments: tc.args})
+		if err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: expected schema rejection containing %q, got err=%v", tc.name, tc.want, err)
 		}
 	}
 	if n := len(fp.methods()); n != 0 {

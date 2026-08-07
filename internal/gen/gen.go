@@ -376,6 +376,18 @@ func writeGroup(b *strings.Builder, fn string, models []toolModel, group string)
 	b.WriteString("}\n\n")
 }
 
+// constrainedFields returns the body+query fields carrying value constraints —
+// they get both runtime validators and InputSchema enrichment.
+func constrainedFields(m toolModel) []field {
+	var out []field
+	for _, f := range append(append([]field{}, m.BodyFields...), m.QueryParams...) {
+		if len(f.Enum) > 0 || f.Min != nil || f.Max != nil || f.MinLen != nil {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
 func emitTool(b *strings.Builder, m toolModel) {
 	typeName := camel(m.Name) + "In"
 	method := "http.Method" + camel(strings.ToLower(m.Method))
@@ -411,6 +423,29 @@ func emitTool(b *strings.Builder, m toolModel) {
 	}
 	b.WriteString("\t\t}\n")
 
+	// Enrich the inferred InputSchema with the spec's value constraints so MCP
+	// clients see enum/min/max in tools/list and the SDK rejects violations
+	// before the handler. Only emitted when the tool has constraints; otherwise
+	// the SDK infers the schema itself (identical inference path).
+	constrained := constrainedFields(m)
+	if len(constrained) > 0 {
+		fmt.Fprintf(b, "\t\tschema := inferSchema[%s]()\n", typeName)
+		for _, f := range constrained {
+			if len(f.Enum) > 0 {
+				fmt.Fprintf(b, "\t\tschema.Properties[%q].Enum = enumVals(%s)\n", f.JSONName, quoteList(f.Enum))
+			}
+			if f.MinLen != nil {
+				fmt.Fprintf(b, "\t\tschema.Properties[%q].MinLength = iptr(%d)\n", f.JSONName, *f.MinLen)
+			}
+			if f.Min != nil {
+				fmt.Fprintf(b, "\t\tschema.Properties[%q].Minimum = f64(%d)\n", f.JSONName, *f.Min)
+			}
+			if f.Max != nil {
+				fmt.Fprintf(b, "\t\tschema.Properties[%q].Maximum = f64(%d)\n", f.JSONName, *f.Max)
+			}
+		}
+	}
+
 	anno := "roAnno()"
 	if m.Group == "write" {
 		if m.Destructive {
@@ -419,8 +454,12 @@ func emitTool(b *strings.Builder, m toolModel) {
 			anno = "additiveAnno()"
 		}
 	}
-	fmt.Fprintf(b, "\t\tmcp.AddTool(s, &mcp.Tool{Name: %q, Description: %q, Annotations: %s},\n",
-		m.Name, m.Summary, anno)
+	schemaField := ""
+	if len(constrained) > 0 {
+		schemaField = ", InputSchema: schema"
+	}
+	fmt.Fprintf(b, "\t\tmcp.AddTool(s, &mcp.Tool{Name: %q, Description: %q, Annotations: %s%s},\n",
+		m.Name, m.Summary, anno, schemaField)
 	fmt.Fprintf(b, "\t\t\tfunc(ctx context.Context, _ *mcp.CallToolRequest, in %s) (*mcp.CallToolResult, any, error) {\n", typeName)
 
 	emitValidate(b, m)

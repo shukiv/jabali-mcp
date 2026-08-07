@@ -48,7 +48,9 @@ func registerAdminWrite(s *mcp.Server, reg *client.Registry) {
 			IsAdmin  *bool  `json:"is_admin,omitempty" jsonschema:"is admin"`
 			Password string `json:"password" jsonschema:"password"`
 		}
-		mcp.AddTool(s, &mcp.Tool{Name: "admin_create_user", Description: "Create a tenant user (admin)", Annotations: additiveAnno()},
+		schema := inferSchema[AdminCreateUserIn]()
+		schema.Properties["password"].MinLength = iptr(12)
+		mcp.AddTool(s, &mcp.Tool{Name: "admin_create_user", Description: "Create a tenant user (admin)", Annotations: additiveAnno(), InputSchema: schema},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in AdminCreateUserIn) (*mcp.CallToolResult, any, error) {
 				if r := vMinLen("password", in.Password, 12); r != nil {
 					return r, nil, nil
@@ -70,7 +72,10 @@ func registerAdminWrite(s *mcp.Server, reg *client.Registry) {
 			DefaultDnsTtl int    `json:"default_dns_ttl,omitempty" jsonschema:"Server-wide default TTL for new DNS records (seconds)."`
 			Hostname      string `json:"hostname,omitempty" jsonschema:"hostname"`
 		}
-		mcp.AddTool(s, &mcp.Tool{Name: "admin_update_settings", Description: "Update server-wide settings (admin)", Annotations: additiveAnno()},
+		schema := inferSchema[AdminUpdateSettingsIn]()
+		schema.Properties["default_dns_ttl"].Minimum = f64(60)
+		schema.Properties["default_dns_ttl"].Maximum = f64(86400)
+		mcp.AddTool(s, &mcp.Tool{Name: "admin_update_settings", Description: "Update server-wide settings (admin)", Annotations: additiveAnno(), InputSchema: schema},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in AdminUpdateSettingsIn) (*mcp.CallToolResult, any, error) {
 				if in.DefaultDnsTtl != 0 {
 					if r := vMin("default_dns_ttl", in.DefaultDnsTtl, 60); r != nil {
