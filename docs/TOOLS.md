@@ -770,6 +770,21 @@ evidence.
 | `confirm` | boolean | | create directly via gh (write mode only) |
 | `dry_run` | boolean | | preview only |
 
+### search_docs
+
+Search the official Jabali Panel documentation and return the relevant
+sections, so the assistant can consult docs mid-task and then act with the
+panel tools. Reads `<docs-base>/llms.txt` (default base
+`https://jabali-panel.com`, override with `JABALI_DOCS_URL`) and fetches
+matching markdown pages. Fetches are anonymous — the panel token is never
+sent — and restricted to the docs origin; off-origin links in the index are
+ignored.
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `query` | string | ✓ | what to look up, e.g. "configure MTA-STS" |
+| `doc` | string | | doc path/URL from a previous result to fetch in full |
+
 ## Admin tools (require `JABALI_MCP_ADMIN=1` + an admin token)
 
 ### admin_list_users

@@ -42,6 +42,7 @@ func Register(s *mcp.Server, opts client.Options) {
 	registerRead(s, reg)
 	registerComposite(s, reg)
 	registerIssueTools(s, reg, opts.AllowWrite)
+	registerDocsTools(s)
 	if opts.AllowWrite {
 		registerWrite(s, reg)
 	}

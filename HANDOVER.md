@@ -272,6 +272,17 @@ Remaining:
 - CLI mode (tools as subcommands for SSH-only users).
 - MCP resources/prompts: expose panel runbooks as resources, canned prompts.
 
+Done in v0.5.0: `search_docs` (internal/tools/docs.go) — queries the panel
+docs published at jabali-panel.com (`/llms.txt` index per llmstxt.org +
+same-origin markdown pages; `JABALI_DOCS_URL` overrides). Anonymous fetches
+(never the panel token), origin-restricted (llms.txt is untrusted input).
+NOTE: egress surface — this is the second tool that talks to a host other
+than the panel (after report_issue's gh). The site must publish llms.txt for
+it to work; until then it returns a clean "index not available" error.
+Also: context7.json added to both repos (this one and jabali-panel) scoping
+docs indexing for context7.com; submission via the context7.com/add-library
+form is manual.
+
 Done in v0.4.0: `report_issue` (hand-written, internal/tools/issues.go) —
 drafts GitHub issues for jabali-panel/jabali-mcp as prefilled issues/new
 links; write mode + `confirm: true` files directly via the gh CLI. Repo list

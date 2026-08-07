@@ -317,7 +317,9 @@ Full per-tool reference with arguments and constraints: **[docs/TOOLS.md](docs/T
 answer; a failed probe is reported without failing the rest) and
 `report_issue` (draft a bug report / feature request for the jabali-panel or
 jabali-mcp GitHub repo as a prefilled link; in write mode it can also file it
-directly via `gh`, gated by `confirm: true`).
+directly via `gh`, gated by `confirm: true`) and `search_docs` (look up the
+official panel documentation from jabali-panel.com mid-task — anonymous,
+origin-restricted fetches; override the source with `JABALI_DOCS_URL`).
 
 > `preview_file` reads file contents (up to 1 MiB) into the conversation — that
 > can include secrets such as `wp-config.php`. `create_database_user` and the
