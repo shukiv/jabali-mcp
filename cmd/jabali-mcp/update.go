@@ -25,8 +25,7 @@ func execRunner(argv, env []string, stdout, stderr io.Writer) error {
 }
 
 // runUpdate is `jabali-mcp update`: reinstall the binary from source via
-// `go install …@<ref>`, the standard self-update path for a Go tool. (The repo
-// is private, so GOPRIVATE is set for the child; the user needs Go + git access.)
+// `go install …@<ref>`, the standard self-update path for a Go tool.
 func runUpdate(args []string) error {
 	fs := flag.NewFlagSet("update", flag.ContinueOnError)
 	ref := fs.String("ref", "latest", "version to install: latest, a tag (v1.2.3), or a commit")
@@ -41,19 +40,17 @@ func runUpdate(args []string) error {
 	return runUpdateIO(*ref, *dry, os.Stdout, os.Stderr, execRunner)
 }
 
-// runCheckIO reports the newest release tag without installing. It rides
-// `git ls-remote --tags` over the same SSH/token auth `go install` needs, so
-// it works while the repo is private and keeps working if it goes public.
+// runCheckIO reports the newest release tag without installing, via
+// `git ls-remote --tags` over anonymous HTTPS (the repo is public).
 func runCheckIO(stdout io.Writer, run runner) error {
 	gitBin, err := exec.LookPath("git")
 	if err != nil {
 		return fmt.Errorf("`git` is not on PATH")
 	}
 	var buf strings.Builder
-	argv := []string{gitBin, "ls-remote", "--tags", "--refs", "git@github.com:shukiv/jabali-mcp.git", "v*"}
+	argv := []string{gitBin, "ls-remote", "--tags", "--refs", "https://github.com/shukiv/jabali-mcp.git", "v*"}
 	if err := run(argv, os.Environ(), &buf, io.Discard); err != nil {
-		return fmt.Errorf("list release tags: %w\n"+
-			"  (needs git auth to github.com/shukiv — SSH key or token)", err)
+		return fmt.Errorf("list release tags: %w", err)
 	}
 	latest := latestTag(buf.String())
 	if latest == "" {
@@ -117,17 +114,15 @@ func runUpdateIO(ref string, dry bool, stdout, stderr io.Writer, run runner) err
 		return fmt.Errorf("`go` is not on PATH — install Go 1.25+, or update from a source checkout with `git pull && make build`")
 	}
 	argv := []string{goBin, "install", target}
-	env := append(os.Environ(), "GOPRIVATE=github.com/shukiv/*")
 
 	if dry {
-		fmt.Fprintf(stdout, "GOPRIVATE=github.com/shukiv/* %s\n", strings.Join(argv, " "))
+		fmt.Fprintln(stdout, strings.Join(argv, " "))
 		return nil
 	}
 
 	fmt.Fprintf(stderr, "jabali-mcp %s → installing %s …\n", version, target)
-	if err := run(argv, env, stdout, stderr); err != nil {
-		return fmt.Errorf("go install failed: %w\n"+
-			"  (private repo — ensure git can authenticate to github.com/shukiv, e.g. SSH or a token)", err)
+	if err := run(argv, os.Environ(), stdout, stderr); err != nil {
+		return fmt.Errorf("go install failed: %w", err)
 	}
 	fmt.Fprintln(stderr, "done — the new binary is in your Go bin (`go env GOBIN`, else `$(go env GOPATH)/bin`). "+
 		"Restart your MCP client to pick it up.")

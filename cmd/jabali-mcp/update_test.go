@@ -19,8 +19,7 @@ func TestUpdateDryRunBuildsGoInstall(t *testing.T) {
 		t.Error("dry-run must not execute the command")
 	}
 	got := out.String()
-	if !strings.Contains(got, "go install github.com/shukiv/jabali-mcp/cmd/jabali-mcp@latest") ||
-		!strings.Contains(got, "GOPRIVATE=github.com/shukiv/*") {
+	if !strings.Contains(got, "go install github.com/shukiv/jabali-mcp/cmd/jabali-mcp@latest") {
 		t.Errorf("unexpected dry-run output: %q", got)
 	}
 }

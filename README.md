@@ -36,46 +36,45 @@ scoping, it rides them.
 (see [Set up](#set-up)). The server speaks MCP over stdio — an MCP client
 (Claude Code, Claude Desktop, …) launches it; you don't run it as a daemon.
 
-### From source (recommended)
+### Prebuilt binaries
 
-The repo is private, so clone over SSH and build:
-
-```sh
-git clone git@github.com:shukiv/jabali-mcp.git
-cd jabali-mcp
-make build            # -> ./jabali-mcp
-```
-
-`make build` stamps the version from `git describe`. Move the binary onto your
-`PATH` if you like:
+Grab the binary for your platform from the
+[latest release](https://github.com/shukiv/jabali-mcp/releases/latest)
+(linux/darwin × amd64/arm64, with SHA256SUMS), then:
 
 ```sh
-sudo install -m 0755 jabali-mcp /usr/local/bin/jabali-mcp
+chmod +x jabali-mcp_*_linux_amd64
+sudo install -m 0755 jabali-mcp_*_linux_amd64 /usr/local/bin/jabali-mcp
 ```
 
 ### With `go install`
 
 ```sh
-# private repo: tell the Go toolchain not to use the public proxy/sumdb,
-# and make sure git can auth to github (SSH or a token).
-export GOPRIVATE=github.com/shukiv/*
 go install github.com/shukiv/jabali-mcp/cmd/jabali-mcp@latest
 ```
 
 The binary lands in `$(go env GOBIN)` (or `$(go env GOPATH)/bin`).
 
+### From source
+
+```sh
+git clone https://github.com/shukiv/jabali-mcp.git
+cd jabali-mcp
+make build            # -> ./jabali-mcp  (stamps the version from git describe)
+```
+
 ### Update
 
 ```sh
-jabali-mcp update          # re-installs the latest (go install …@latest)
+jabali-mcp update --check        # report the latest release, install nothing
+jabali-mcp update                # re-installs the latest (go install …@latest)
 jabali-mcp update --ref v1.2.3   # pin a tag/commit
 jabali-mcp update --dry-run      # print the command only
 ```
 
-Self-update runs `go install` with `GOPRIVATE` set for the private repo, so it
-needs Go and git access to `github.com/shukiv`. Restart your MCP client afterward
-to pick up the new binary. (Installed from a checkout instead? `git pull && make
-build`.)
+Self-update runs `go install`, so it needs Go on the PATH. Restart your MCP
+client afterward to pick up the new binary. (Installed from a checkout instead?
+`git pull && make build`. Installed a prebuilt binary? Download the new release.)
 
 ### Verify
 

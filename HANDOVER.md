@@ -4,7 +4,8 @@ Everything you need to pick this project up: what it is, how it works, every
 decision and why, the traps we already hit, and what's next. Written 2026-08-07
 at **v0.2.0**.
 
-- **Repo:** `github.com/shukiv/jabali-mcp` (**private**), local checkout at
+- **Repo:** `github.com/shukiv/jabali-mcp` (**public** since 2026-08-07;
+  history secret-scanned clean before the flip), local checkout at
   `/home/shuki/projects/jabali-mcp`.
 - **What it is:** a Model Context Protocol (stdio) server exposing the
   [Jabali Panel](https://github.com/shukiv/jabali-panel) REST API as MCP tools,
@@ -37,9 +38,10 @@ at **v0.2.0**.
   previews + a schema-rejection probe). Run before every tag:
   `make build && go run ./scripts/smoke ./jabali-mcp`.
 - Registered in the operator's Claude Code as a pinned-version launch:
-  `go run github.com/shukiv/jabali-mcp/cmd/jabali-mcp@v0.2.0` with
-  `GOPRIVATE=github.com/shukiv/*` (the npx analog for a compiled Go tool;
-  ~1.6 s first launch, ~0.6 s cached).
+  `go run github.com/shukiv/jabali-mcp/cmd/jabali-mcp@v0.3.0` (the npx analog
+  for a compiled Go tool; ~1.6 s first launch, ~0.6 s cached). The registration
+  still carries `GOPRIVATE=github.com/shukiv/*` — harmless now the repo is
+  public, drop it on the next re-register.
 - Panel-side companions are **merged to jabali2 main and deployed to
   testserver** (see "Panel-side integration").
 - Tests: unit + in-memory MCP round-trip + golden drift tests, all green
@@ -143,7 +145,7 @@ first panel.
 | Decision | Why |
 |---|---|
 | Go, not TypeScript | single binary, no runtime deps, same language as the panel |
-| GitHub, private repo | GitHub is the panel's source of truth; MCP follows |
+| GitHub, private repo (made public 2026-08-07) | GitHub is the panel's source of truth; MCP follows |
 | Bearer token, not HMAC automation API | documented, simpler, ownership already enforced server-side |
 | Tools generated from OpenAPI | zero drift; new tools are curation entries, not code |
 | Read-only by default, write opt-in, confirm for destructive | fronts a hosting control plane; prompt-injection is the threat model |
@@ -180,7 +182,7 @@ are deliberately not exposed.
    tag because `go run …@tag` does not apply ldflags).
 2. Commit, `git tag vX.Y.Z`, `git push origin main vX.Y.Z`.
 3. Re-register clients on the new pin:
-   `claude mcp add jabali --scope user --env GOPRIVATE='github.com/shukiv/*' -- go run github.com/shukiv/jabali-mcp/cmd/jabali-mcp@vX.Y.Z`
+   `claude mcp add jabali --scope user -- go run github.com/shukiv/jabali-mcp/cmd/jabali-mcp@vX.Y.Z`
 4. Users on installed binaries run `jabali-mcp update` (or
    `update --ref vX.Y.Z`).
 
@@ -238,9 +240,11 @@ All merged to `jabali-panel` main (`01c2adaf`) and deployed to testserver:
 - **Upstream spec YAML:** flow-style descriptions containing `{id}` are invalid
   YAML unless quoted (hit on `poll /applications/{id}`; fixed in the vendored
   copy and upstream via #961).
-- **Private repo mechanics:** every `go run`/`go install` path needs
-  `GOPRIVATE=github.com/shukiv/*` and git auth to GitHub; `jabali-mcp update`
-  sets it for its child process itself.
+- **Private repo mechanics (historical):** while the repo was private, every
+  `go run`/`go install` path needed `GOPRIVATE=github.com/shukiv/*` + git auth.
+  Public since 2026-08-07 — plain `go install` works; GOPRIVATE removed from
+  `update` and the README. Note: the Go module proxy can lag a few minutes
+  behind a freshly pushed tag.
 - **Never `InsecureSkipVerify`** — `JABALI_CA_FILE` adds a CA instead. Security
   hardening is never relaxed for convenience.
 - **Repo hooks (jabali2 side):** commit messages containing the literal string
@@ -267,9 +271,9 @@ Remaining:
 
 - CLI mode (tools as subcommands for SSH-only users).
 - MCP resources/prompts: expose panel runbooks as resources, canned prompts.
-- Public release: flip repo visibility (operator decision — publishes history),
-  GitHub Releases with prebuilt binaries (workflow exists:
-  `.github/workflows/release.yml`), drop GOPRIVATE notes from README.
+
+Public release: DONE (2026-08-07) — repo public, tagged releases build
+binaries via `.github/workflows/release.yml`, GOPRIVATE dropped everywhere.
 
 ## Operational notes
 
