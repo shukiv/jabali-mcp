@@ -5,6 +5,7 @@ package tools
 import (
 	"context"
 	"net/http"
+	"net/url"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -101,6 +102,30 @@ func registerAdminWrite(s *mcp.Server, reg *client.Registry) {
 				path := "/admin/updates/run"
 				preview := "Destructive, irreversible — Trigger `jabali update` (admin). Target: " + path
 				return runWrite(ctx, reg, in, true, preview, reqSpec{http.MethodPost, path, nil})
+			})
+	}
+	{
+		type AdminRenewSslIn struct {
+			panelArg
+			dryRunArg
+			DomainId string `json:"domain_id" jsonschema:"the domain's ULID"`
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "admin_renew_ssl", Description: "Force-renew a domain's certificate (admin)", Annotations: additiveAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in AdminRenewSslIn) (*mcp.CallToolResult, any, error) {
+				path := "/domains/" + url.PathEscape(in.DomainId) + "/ssl/renew"
+				return runWrite(ctx, reg, in, false, "", reqSpec{http.MethodPost, path, nil})
+			})
+	}
+	{
+		type AdminRetrySslIn struct {
+			panelArg
+			dryRunArg
+			DomainId string `json:"domain_id" jsonschema:"the domain's ULID"`
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "admin_retry_ssl", Description: "Retry a failed certificate issuance (admin)", Annotations: additiveAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in AdminRetrySslIn) (*mcp.CallToolResult, any, error) {
+				path := "/domains/" + url.PathEscape(in.DomainId) + "/ssl/retry"
+				return runWrite(ctx, reg, in, false, "", reqSpec{http.MethodPost, path, nil})
 			})
 	}
 }

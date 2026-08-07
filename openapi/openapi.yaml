@@ -58,8 +58,12 @@ tags:
     description: Per-user systemd-user scheduled jobs.
   - name: Files
     description: File-manager REST surface.
+  - name: PHP
+    description: Per-domain PHP settings + installed runtimes.
   - name: SSL
     description: Per-domain Let's Encrypt + custom certs.
+  - name: Account
+    description: The calling user's own account — profile, disk usage, activity.
   - name: Users
     description: Admin user CRUD.
   - name: Server Settings
@@ -475,10 +479,77 @@ paths:
         "201": { description: Created }
 
   /mailboxes/{id}:
+    get:
+      tags: [Mailboxes]
+      summary: Get a mailbox (address, quota, flags)
+      parameters: [ { in: path, name: id, required: true, schema: { type: string, format: ulid } } ]
+      responses: { "200": { description: OK } }
+    patch:
+      tags: [Mailboxes]
+      summary: Update a mailbox (partial — absent fields are left untouched)
+      parameters: [ { in: path, name: id, required: true, schema: { type: string, format: ulid } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                quota_bytes:  { type: integer, minimum: 16777216, description: "mailbox quota in bytes (min 16 MiB)" }
+                display_name: { type: string, description: "display name shown in webmail" }
+                is_disabled:  { type: boolean, description: "disable login + delivery for this mailbox" }
+                send_only:    { type: boolean, description: "mailbox may send but not receive" }
+      responses: { "200": { description: Updated } }
     delete:
       tags: [Mailboxes]
       parameters: [ { in: path, name: id, required: true, schema: { type: string, format: ulid } } ]
       responses: { "204": { description: Deleted } }
+
+  /mailboxes/{id}/autoresponder:
+    get:
+      tags: [Mailboxes]
+      summary: Get a mailbox's autoresponder (vacation reply)
+      parameters: [ { in: path, name: id, required: true, schema: { type: string, format: ulid } } ]
+      responses: { "200": { description: Autoresponder config } }
+    put:
+      tags: [Mailboxes]
+      summary: Set a mailbox's autoresponder (vacation reply)
+      parameters: [ { in: path, name: id, required: true, schema: { type: string, format: ulid } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties:
+                enabled:   { type: boolean, description: "turn the autoresponder on or off" }
+                from_date: { type: string, format: date-time, description: "start (RFC 3339, e.g. 2026-08-10T00:00:00Z); omit for immediate" }
+                to_date:   { type: string, format: date-time, description: "end (RFC 3339); omit for open-ended" }
+                subject:   { type: string, description: "reply subject" }
+                text_body: { type: string, description: "plain-text reply body" }
+                html_body: { type: string, description: "HTML reply body" }
+      responses: { "200": { description: Updated } }
+    delete:
+      tags: [Mailboxes]
+      summary: Remove a mailbox's autoresponder
+      parameters: [ { in: path, name: id, required: true, schema: { type: string, format: ulid } } ]
+      responses: { "204": { description: Deleted } }
+
+  /mailboxes/{id}/rotate-password:
+    post:
+      tags: [Mailboxes]
+      summary: Rotate a mailbox password (returns the new password once)
+      parameters: [ { in: path, name: id, required: true, schema: { type: string, format: ulid } } ]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                new_password: { type: string, format: password, description: "omit to auto-generate a strong password" }
+      responses: { "200": { description: "New password (shown once — save it immediately)" } }
 
   /mailboxes/{id}/password:
     put:
@@ -541,6 +612,24 @@ paths:
                 path:      { type: string, default: "/", description: "Install path under doc-root." }
       responses: { "201": { description: "Install started — poll /applications/{id} for status" } }
 
+  /applications/registry:
+    get:
+      tags: [Applications]
+      summary: App catalog — every kind the panel can one-click install
+      responses: { "200": { description: Registry entries } }
+
+  /applications/{id}:
+    get:
+      tags: [Applications]
+      summary: Get an installed app (status, version, URL)
+      parameters: [ { in: path, name: id, required: true, schema: { type: string, format: ulid } } ]
+      responses: { "200": { description: OK } }
+    delete:
+      tags: [Applications]
+      summary: Uninstall an app and remove its files (async)
+      parameters: [ { in: path, name: id, required: true, schema: { type: string, format: ulid } } ]
+      responses: { "202": { description: Delete queued } }
+
   # ----------------------------------------------------------- Backups ---
 
   /me/backups:
@@ -559,6 +648,20 @@ paths:
       summary: Restore a snapshot
       parameters: [ { in: path, name: id, required: true, schema: { type: string, format: ulid } } ]
       responses: { "202": { description: Restore queued } }
+
+  /me/backups/{id}:
+    delete:
+      tags: [Backups]
+      summary: Delete a snapshot (forgets + prunes its data)
+      parameters: [ { in: path, name: id, required: true, schema: { type: string, format: ulid } } ]
+      responses: { "200": { description: Deleted } }
+
+  /me/backups/{id}/manifest:
+    get:
+      tags: [Backups]
+      summary: List a snapshot's contents (manifest; only for succeeded backups)
+      parameters: [ { in: path, name: id, required: true, schema: { type: string, format: ulid } } ]
+      responses: { "200": { description: Manifest JSON } }
 
   # --------------------------------------------------------- Databases ---
 
@@ -609,6 +712,307 @@ paths:
                 name:   { type: string, example: myapp_prod }
                 engine: { type: string, enum: [mysql, postgres] }
       responses: { "201": { description: Created } }
+
+  /databases/{id}:
+    get:
+      tags: [Databases]
+      summary: Get a database (engine, size, grants)
+      parameters: [ { in: path, name: id, required: true, schema: { type: string, format: ulid } } ]
+      responses: { "200": { description: OK } }
+    delete:
+      tags: [Databases]
+      summary: Drop a database and all its data
+      parameters: [ { in: path, name: id, required: true, schema: { type: string, format: ulid } } ]
+      responses: { "204": { description: Deleted } }
+
+  /database-users:
+    get:
+      tags: [Databases]
+      summary: List your database users
+      parameters:
+        - { in: query, name: page, schema: { type: integer, minimum: 1, description: "page number (1-based)" } }
+        - { in: query, name: page_size, schema: { type: integer, minimum: 1, maximum: 200, description: "results per page (default 20)" } }
+      responses: { "200": { description: Database users } }
+    post:
+      tags: [Databases]
+      summary: Create a database user (returns its password once)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username]
+              properties:
+                username: { type: string, description: "login name (your account prefix is enforced)" }
+                engine:   { type: string, description: "database engine (default mariadb)" }
+      responses: { "201": { description: "Created — response contains the plaintext password, shown once" } }
+
+  /database-users/{id}:
+    delete:
+      tags: [Databases]
+      summary: Delete a database user (revokes all its grants)
+      parameters: [ { in: path, name: id, required: true, schema: { type: string, format: ulid } } ]
+      responses: { "200": { description: Deleted } }
+
+  /database-users/{id}/grants:
+    post:
+      tags: [Databases]
+      summary: Grant a database user access to one of your databases
+      parameters: [ { in: path, name: id, required: true, schema: { type: string, format: ulid } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [database_id, grant_level]
+              properties:
+                database_id: { type: string, format: ulid, description: "the database's ULID" }
+                grant_level: { type: string, enum: [rw, ro], description: "rw = read-write, ro = read-only" }
+      responses: { "201": { description: Granted } }
+
+  /database-user-grants/{id}:
+    delete:
+      tags: [Databases]
+      summary: Revoke one database grant (keeps the user)
+      parameters: [ { in: path, name: id, required: true, schema: { type: string, format: ulid } } ]
+      responses: { "204": { description: Revoked } }
+
+  /database-users/{id}/rotate-password:
+    post:
+      tags: [Databases]
+      summary: Rotate a database user's password (returns the new password once)
+      parameters: [ { in: path, name: id, required: true, schema: { type: string, format: ulid } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [new_password]
+              properties:
+                new_password: { type: string, format: password, description: "the new password to set" }
+      responses: { "200": { description: "Rotated — save the new password immediately" } }
+
+  # --------------------------------------------------------------- SSL ---
+
+  /domains/{id}/ssl:
+    get:
+      tags: [SSL]
+      summary: SSL certificate status for a domain
+      parameters: [ { in: path, name: id, required: true, schema: { type: string, format: ulid } } ]
+      responses: { "200": { description: Certificate status }, "404": { description: No certificate } }
+    post:
+      tags: [SSL]
+      summary: Enable SSL — issue a Let's Encrypt certificate for the domain
+      parameters: [ { in: path, name: id, required: true, schema: { type: string, format: ulid } } ]
+      responses: { "202": { description: "Issuance queued (200 if a valid cert has >30 days left)" } }
+    delete:
+      tags: [SSL]
+      summary: Disable SSL — revoke the domain's certificate and stop serving HTTPS
+      parameters: [ { in: path, name: id, required: true, schema: { type: string, format: ulid } } ]
+      responses: { "202": { description: Revocation queued } }
+
+  /domains/{id}/ssl/renew:
+    post:
+      tags: [SSL]
+      summary: Force-renew a domain's certificate (admin)
+      parameters: [ { in: path, name: id, required: true, schema: { type: string, format: ulid } } ]
+      responses: { "202": { description: Renewal queued } }
+
+  /domains/{id}/ssl/retry:
+    post:
+      tags: [SSL]
+      summary: Retry a failed certificate issuance (admin)
+      parameters: [ { in: path, name: id, required: true, schema: { type: string, format: ulid } } ]
+      responses: { "202": { description: Retry queued } }
+
+  # ------------------------------------------------------- Diagnostics ---
+
+  /domains/{id}/whois:
+    get:
+      tags: [Domains]
+      summary: WHOIS lookup for a domain (registrar, expiry, name servers)
+      parameters: [ { in: path, name: id, required: true, schema: { type: string, format: ulid } } ]
+      responses: { "200": { description: WHOIS data } }
+
+  /domains/{id}/bandwidth:
+    get:
+      tags: [Domains]
+      summary: Bandwidth usage for a domain (bytes + requests, daily series)
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: ulid } }
+        - { in: query, name: from, schema: { type: string, description: "start date YYYY-MM-DD (default 30 days ago)" } }
+        - { in: query, name: to, schema: { type: string, description: "end date YYYY-MM-DD (default today)" } }
+      responses: { "200": { description: Bandwidth series } }
+
+  /me:
+    get:
+      tags: [Account]
+      summary: The calling account — id, email, package, limits
+      responses: { "200": { description: Account info } }
+
+  /me/disk-usage:
+    get:
+      tags: [Account]
+      summary: Disk usage breakdown — files, mail, databases vs quota
+      responses: { "200": { description: Usage snapshot } }
+
+  /me/activity:
+    get:
+      tags: [Account]
+      summary: Your recent activity (audit events, newest first)
+      responses: { "200": { description: Activity page } }
+
+  # -------------------------------------------------------------- Cron ---
+
+  /cron:
+    get:
+      tags: [Cron]
+      summary: List your cron jobs
+      responses: { "200": { description: Cron jobs } }
+    post:
+      tags: [Cron]
+      summary: Create a cron job
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, command, schedule]
+              properties:
+                name:     { type: string, description: "job label" }
+                command:  { type: string, description: "shell command to run (as your user)" }
+                schedule: { type: string, description: "cron schedule expression, e.g. '*/15 * * * *'" }
+                enabled:  { type: boolean, default: true }
+      responses: { "201": { description: Created } }
+
+  /cron/{id}:
+    get:
+      tags: [Cron]
+      summary: Get a cron job
+      parameters: [ { in: path, name: id, required: true, schema: { type: string, format: ulid } } ]
+      responses: { "200": { description: OK } }
+    patch:
+      tags: [Cron]
+      summary: Update a cron job (partial — absent fields are left untouched)
+      parameters: [ { in: path, name: id, required: true, schema: { type: string, format: ulid } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:     { type: string, description: "job label" }
+                command:  { type: string, description: "shell command to run (as your user)" }
+                schedule: { type: string, description: "cron schedule expression, e.g. '*/15 * * * *'" }
+                enabled:  { type: boolean, description: "enable or disable the job" }
+      responses: { "200": { description: Updated } }
+    delete:
+      tags: [Cron]
+      summary: Delete a cron job
+      parameters: [ { in: path, name: id, required: true, schema: { type: string, format: ulid } } ]
+      responses: { "204": { description: Deleted } }
+
+  /cron/{id}/run-now:
+    post:
+      tags: [Cron]
+      summary: Run a cron job immediately (409 if the job is disabled)
+      parameters: [ { in: path, name: id, required: true, schema: { type: string, format: ulid } } ]
+      responses: { "200": { description: Run result } }
+
+  /cron/{id}/log:
+    get:
+      tags: [Cron]
+      summary: Read a cron job's recent log output
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: ulid } }
+        - { in: query, name: lines, schema: { type: integer, minimum: 1, maximum: 500, description: "trailing lines to return (default 50)" } }
+      responses: { "200": { description: Log lines } }
+
+  # ---------------------------------------------------------- SSH keys ---
+
+  /ssh-keys:
+    get:
+      tags: [SSH Keys]
+      summary: List your SSH keys (name + fingerprint; never the key material)
+      responses: { "200": { description: Keys } }
+    post:
+      tags: [SSH Keys]
+      summary: Add an SSH public key for SFTP/SSH access
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, public_key]
+              properties:
+                name:       { type: string, description: "key label, e.g. laptop" }
+                public_key: { type: string, description: "OpenSSH public key line (ed25519 or RSA >= 2048 bits)" }
+      responses: { "201": { description: Added } }
+
+  /ssh-keys/{id}:
+    delete:
+      tags: [SSH Keys]
+      summary: Remove an SSH key (revokes its access)
+      parameters: [ { in: path, name: id, required: true, schema: { type: string, format: ulid } } ]
+      responses: { "204": { description: Removed } }
+
+  # --------------------------------------------------------------- PHP ---
+
+  /domains/{id}/php-settings:
+    get:
+      tags: [PHP]
+      summary: Effective PHP settings for a domain (version, limits)
+      parameters: [ { in: path, name: id, required: true, schema: { type: string, format: ulid } } ]
+      responses: { "200": { description: Settings } }
+    patch:
+      tags: [PHP]
+      summary: Update a domain's PHP settings (partial — absent fields are left untouched)
+      parameters: [ { in: path, name: id, required: true, schema: { type: string, format: ulid } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                php_version:             { type: string, description: "e.g. 8.3 — must be installed on the server (see list_php_versions); changes the pool shared by ALL your domains" }
+                php_memory_limit:        { type: string, description: "digits + optional K/M/G suffix, e.g. 256M" }
+                php_upload_max_filesize: { type: string, description: "digits + optional K/M/G suffix, e.g. 64M" }
+                php_post_max_size:       { type: string, description: "digits + optional K/M/G suffix, e.g. 64M" }
+                php_max_input_vars:      { type: integer, minimum: 1, maximum: 86400, description: "max request input variables" }
+                php_max_execution_time:  { type: integer, minimum: 1, maximum: 86400, description: "script time limit, seconds" }
+                php_max_input_time:      { type: integer, minimum: 1, maximum: 86400, description: "input parsing time limit, seconds" }
+      responses: { "200": { description: Updated } }
+
+  /php/versions:
+    get:
+      tags: [PHP]
+      summary: PHP runtimes installed on the server
+      responses: { "200": { description: Versions } }
+
+  # ------------------------------------------------------------- Files ---
+
+  /files:
+    get:
+      tags: [Files]
+      summary: List a directory in your home (name, size, mtime per entry)
+      parameters:
+        - { in: query, name: path, required: true, schema: { type: string, description: "directory path inside your home, e.g. /public_html" } }
+      responses: { "200": { description: Directory entries } }
+
+  /files/preview:
+    get:
+      tags: [Files]
+      summary: Read a file's contents (max 1 MiB; may expose secrets such as wp-config.php — handle with care)
+      parameters:
+        - { in: query, name: path, required: true, schema: { type: string, description: "file path inside your home" } }
+      responses: { "200": { description: "File content (base64 when binary)" } }
 
   # ---------------------------------------------------------- Admin: Users ---
 

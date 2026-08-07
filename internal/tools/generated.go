@@ -191,6 +191,296 @@ func registerRead(s *mcp.Server, reg *client.Registry) {
 				return runRead(ctx, reg, in, reqSpec{http.MethodGet, path, nil})
 			})
 	}
+	{
+		type GetSslStatusIn struct {
+			panelArg
+			DomainId string `json:"domain_id" jsonschema:"the domain's ULID"`
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "get_ssl_status", Description: "SSL certificate status for a domain", Annotations: roAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in GetSslStatusIn) (*mcp.CallToolResult, any, error) {
+				path := "/domains/" + url.PathEscape(in.DomainId) + "/ssl"
+				return runRead(ctx, reg, in, reqSpec{http.MethodGet, path, nil})
+			})
+	}
+	{
+		type GetDomainWhoisIn struct {
+			panelArg
+			DomainId string `json:"domain_id" jsonschema:"the domain's ULID"`
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "get_domain_whois", Description: "WHOIS lookup for a domain (registrar, expiry, name servers)", Annotations: roAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in GetDomainWhoisIn) (*mcp.CallToolResult, any, error) {
+				path := "/domains/" + url.PathEscape(in.DomainId) + "/whois"
+				return runRead(ctx, reg, in, reqSpec{http.MethodGet, path, nil})
+			})
+	}
+	{
+		type GetDomainBandwidthIn struct {
+			panelArg
+			DomainId string `json:"domain_id" jsonschema:"the domain's ULID"`
+			From     string `json:"from,omitempty" jsonschema:"start date YYYY-MM-DD (default 30 days ago)"`
+			To       string `json:"to,omitempty" jsonschema:"end date YYYY-MM-DD (default today)"`
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "get_domain_bandwidth", Description: "Bandwidth usage for a domain (bytes + requests, daily series)", Annotations: roAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in GetDomainBandwidthIn) (*mcp.CallToolResult, any, error) {
+				path := "/domains/" + url.PathEscape(in.DomainId) + "/bandwidth"
+				q := url.Values{}
+				if in.From != "" {
+					q.Set("from", in.From)
+				}
+				if in.To != "" {
+					q.Set("to", in.To)
+				}
+				if enc := q.Encode(); enc != "" {
+					path += "?" + enc
+				}
+				return runRead(ctx, reg, in, reqSpec{http.MethodGet, path, nil})
+			})
+	}
+	{
+		type WhoamiIn struct {
+			panelArg
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "whoami", Description: "The calling account — id, email, package, limits", Annotations: roAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in WhoamiIn) (*mcp.CallToolResult, any, error) {
+				path := "/me"
+				return runRead(ctx, reg, in, reqSpec{http.MethodGet, path, nil})
+			})
+	}
+	{
+		type GetDiskUsageIn struct {
+			panelArg
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "get_disk_usage", Description: "Disk usage breakdown — files, mail, databases vs quota", Annotations: roAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in GetDiskUsageIn) (*mcp.CallToolResult, any, error) {
+				path := "/me/disk-usage"
+				return runRead(ctx, reg, in, reqSpec{http.MethodGet, path, nil})
+			})
+	}
+	{
+		type ListActivityIn struct {
+			panelArg
+			Page     int    `json:"page,omitempty" jsonschema:"page number (1-based)"`
+			PageSize int    `json:"page_size,omitempty" jsonschema:"results per page"`
+			Q        string `json:"q,omitempty" jsonschema:"search filter"`
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "list_activity", Description: "Your recent activity (audit events, newest first)", Annotations: roAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in ListActivityIn) (*mcp.CallToolResult, any, error) {
+				path := "/me/activity"
+				path += listQuery(in.Page, in.PageSize, in.Q)
+				return runRead(ctx, reg, in, reqSpec{http.MethodGet, path, nil})
+			})
+	}
+	{
+		type ListCronJobsIn struct {
+			panelArg
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "list_cron_jobs", Description: "List your cron jobs", Annotations: roAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in ListCronJobsIn) (*mcp.CallToolResult, any, error) {
+				path := "/cron"
+				return runRead(ctx, reg, in, reqSpec{http.MethodGet, path, nil})
+			})
+	}
+	{
+		type GetCronJobIn struct {
+			panelArg
+			CronId string `json:"cron_id" jsonschema:"the cron's ULID"`
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "get_cron_job", Description: "Get a cron job", Annotations: roAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in GetCronJobIn) (*mcp.CallToolResult, any, error) {
+				path := "/cron/" + url.PathEscape(in.CronId)
+				return runRead(ctx, reg, in, reqSpec{http.MethodGet, path, nil})
+			})
+	}
+	{
+		type GetCronLogIn struct {
+			panelArg
+			CronId string `json:"cron_id" jsonschema:"the cron's ULID"`
+			Lines  int    `json:"lines,omitempty" jsonschema:"trailing lines to return (default 50)"`
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "get_cron_log", Description: "Read a cron job's recent log output", Annotations: roAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in GetCronLogIn) (*mcp.CallToolResult, any, error) {
+				if in.Lines != 0 {
+					if r := vMin("lines", in.Lines, 1); r != nil {
+						return r, nil, nil
+					}
+					if r := vMax("lines", in.Lines, 500); r != nil {
+						return r, nil, nil
+					}
+				}
+				path := "/cron/" + url.PathEscape(in.CronId) + "/log"
+				q := url.Values{}
+				if in.Lines != 0 {
+					q.Set("lines", strconv.Itoa(in.Lines))
+				}
+				if enc := q.Encode(); enc != "" {
+					path += "?" + enc
+				}
+				return runRead(ctx, reg, in, reqSpec{http.MethodGet, path, nil})
+			})
+	}
+	{
+		type ListAppCatalogIn struct {
+			panelArg
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "list_app_catalog", Description: "App catalog — every kind the panel can one-click install", Annotations: roAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in ListAppCatalogIn) (*mcp.CallToolResult, any, error) {
+				path := "/applications/registry"
+				return runRead(ctx, reg, in, reqSpec{http.MethodGet, path, nil})
+			})
+	}
+	{
+		type GetApplicationIn struct {
+			panelArg
+			ApplicationId string `json:"application_id" jsonschema:"the application's ULID"`
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "get_application", Description: "Get an installed app (status, version, URL)", Annotations: roAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in GetApplicationIn) (*mcp.CallToolResult, any, error) {
+				path := "/applications/" + url.PathEscape(in.ApplicationId)
+				return runRead(ctx, reg, in, reqSpec{http.MethodGet, path, nil})
+			})
+	}
+	{
+		type GetDatabaseIn struct {
+			panelArg
+			DatabasId string `json:"databas_id" jsonschema:"the databas's ULID"`
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "get_database", Description: "Get a database (engine, size, grants)", Annotations: roAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in GetDatabaseIn) (*mcp.CallToolResult, any, error) {
+				path := "/databases/" + url.PathEscape(in.DatabasId)
+				return runRead(ctx, reg, in, reqSpec{http.MethodGet, path, nil})
+			})
+	}
+	{
+		type ListDatabaseUsersIn struct {
+			panelArg
+			Page     int `json:"page,omitempty" jsonschema:"page number (1-based)"`
+			PageSize int `json:"page_size,omitempty" jsonschema:"results per page (default 20)"`
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "list_database_users", Description: "List your database users", Annotations: roAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in ListDatabaseUsersIn) (*mcp.CallToolResult, any, error) {
+				if in.Page != 0 {
+					if r := vMin("page", in.Page, 1); r != nil {
+						return r, nil, nil
+					}
+				}
+				if in.PageSize != 0 {
+					if r := vMin("page_size", in.PageSize, 1); r != nil {
+						return r, nil, nil
+					}
+					if r := vMax("page_size", in.PageSize, 200); r != nil {
+						return r, nil, nil
+					}
+				}
+				path := "/database-users"
+				q := url.Values{}
+				if in.Page != 0 {
+					q.Set("page", strconv.Itoa(in.Page))
+				}
+				if in.PageSize != 0 {
+					q.Set("page_size", strconv.Itoa(in.PageSize))
+				}
+				if enc := q.Encode(); enc != "" {
+					path += "?" + enc
+				}
+				return runRead(ctx, reg, in, reqSpec{http.MethodGet, path, nil})
+			})
+	}
+	{
+		type GetMailboxIn struct {
+			panelArg
+			MailboxId string `json:"mailbox_id" jsonschema:"the mailbox's ULID"`
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "get_mailbox", Description: "Get a mailbox (address, quota, flags)", Annotations: roAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in GetMailboxIn) (*mcp.CallToolResult, any, error) {
+				path := "/mailboxes/" + url.PathEscape(in.MailboxId)
+				return runRead(ctx, reg, in, reqSpec{http.MethodGet, path, nil})
+			})
+	}
+	{
+		type GetAutoresponderIn struct {
+			panelArg
+			MailboxId string `json:"mailbox_id" jsonschema:"the mailbox's ULID"`
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "get_autoresponder", Description: "Get a mailbox's autoresponder (vacation reply)", Annotations: roAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in GetAutoresponderIn) (*mcp.CallToolResult, any, error) {
+				path := "/mailboxes/" + url.PathEscape(in.MailboxId) + "/autoresponder"
+				return runRead(ctx, reg, in, reqSpec{http.MethodGet, path, nil})
+			})
+	}
+	{
+		type GetBackupManifestIn struct {
+			panelArg
+			BackupId string `json:"backup_id" jsonschema:"the backup's ULID"`
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "get_backup_manifest", Description: "List a snapshot's contents (manifest; only for succeeded backups)", Annotations: roAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in GetBackupManifestIn) (*mcp.CallToolResult, any, error) {
+				path := "/me/backups/" + url.PathEscape(in.BackupId) + "/manifest"
+				return runRead(ctx, reg, in, reqSpec{http.MethodGet, path, nil})
+			})
+	}
+	{
+		type ListSshKeysIn struct {
+			panelArg
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "list_ssh_keys", Description: "List your SSH keys (name + fingerprint; never the key material)", Annotations: roAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in ListSshKeysIn) (*mcp.CallToolResult, any, error) {
+				path := "/ssh-keys"
+				return runRead(ctx, reg, in, reqSpec{http.MethodGet, path, nil})
+			})
+	}
+	{
+		type GetPhpSettingsIn struct {
+			panelArg
+			DomainId string `json:"domain_id" jsonschema:"the domain's ULID"`
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "get_php_settings", Description: "Effective PHP settings for a domain (version, limits)", Annotations: roAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in GetPhpSettingsIn) (*mcp.CallToolResult, any, error) {
+				path := "/domains/" + url.PathEscape(in.DomainId) + "/php-settings"
+				return runRead(ctx, reg, in, reqSpec{http.MethodGet, path, nil})
+			})
+	}
+	{
+		type ListPhpVersionsIn struct {
+			panelArg
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "list_php_versions", Description: "PHP runtimes installed on the server", Annotations: roAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in ListPhpVersionsIn) (*mcp.CallToolResult, any, error) {
+				path := "/php/versions"
+				return runRead(ctx, reg, in, reqSpec{http.MethodGet, path, nil})
+			})
+	}
+	{
+		type ListFilesIn struct {
+			panelArg
+			Path string `json:"path" jsonschema:"directory path inside your home, e.g. /public_html"`
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "list_files", Description: "List a directory in your home (name, size, mtime per entry)", Annotations: roAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in ListFilesIn) (*mcp.CallToolResult, any, error) {
+				path := "/files"
+				q := url.Values{}
+				q.Set("path", in.Path)
+				if enc := q.Encode(); enc != "" {
+					path += "?" + enc
+				}
+				return runRead(ctx, reg, in, reqSpec{http.MethodGet, path, nil})
+			})
+	}
+	{
+		type PreviewFileIn struct {
+			panelArg
+			Path string `json:"path" jsonschema:"file path inside your home"`
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "preview_file", Description: "Read a file's contents (max 1 MiB; may expose secrets such as wp-config.php — handle with care)", Annotations: roAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in PreviewFileIn) (*mcp.CallToolResult, any, error) {
+				path := "/files/preview"
+				q := url.Values{}
+				q.Set("path", in.Path)
+				if enc := q.Encode(); enc != "" {
+					path += "?" + enc
+				}
+				return runRead(ctx, reg, in, reqSpec{http.MethodGet, path, nil})
+			})
+	}
 }
 
 func registerWrite(s *mcp.Server, reg *client.Registry) {
@@ -407,6 +697,269 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 			})
 	}
 	{
+		type EnableSslIn struct {
+			panelArg
+			dryRunArg
+			DomainId string `json:"domain_id" jsonschema:"the domain's ULID"`
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "enable_ssl", Description: "Enable SSL — issue a Let's Encrypt certificate for the domain", Annotations: additiveAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in EnableSslIn) (*mcp.CallToolResult, any, error) {
+				path := "/domains/" + url.PathEscape(in.DomainId) + "/ssl"
+				return runWrite(ctx, reg, in, false, "", reqSpec{http.MethodPost, path, nil})
+			})
+	}
+	{
+		type CreateCronJobIn struct {
+			panelArg
+			dryRunArg
+			Command  string `json:"command" jsonschema:"shell command to run (as your user)"`
+			Enabled  *bool  `json:"enabled,omitempty" jsonschema:"enabled"`
+			Name     string `json:"name" jsonschema:"job label"`
+			Schedule string `json:"schedule" jsonschema:"cron schedule expression, e.g. '*/15 * * * *'"`
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "create_cron_job", Description: "Create a cron job", Annotations: additiveAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in CreateCronJobIn) (*mcp.CallToolResult, any, error) {
+				path := "/cron"
+				body := map[string]any{}
+				body["command"] = in.Command
+				if in.Enabled != nil {
+					body["enabled"] = *in.Enabled
+				}
+				body["name"] = in.Name
+				body["schedule"] = in.Schedule
+				return runWrite(ctx, reg, in, false, "", reqSpec{http.MethodPost, path, body})
+			})
+	}
+	{
+		type UpdateCronJobIn struct {
+			panelArg
+			dryRunArg
+			CronId   string `json:"cron_id" jsonschema:"the cron's ULID"`
+			Command  string `json:"command,omitempty" jsonschema:"shell command to run (as your user)"`
+			Enabled  *bool  `json:"enabled,omitempty" jsonschema:"enable or disable the job"`
+			Name     string `json:"name,omitempty" jsonschema:"job label"`
+			Schedule string `json:"schedule,omitempty" jsonschema:"cron schedule expression, e.g. '*/15 * * * *'"`
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "update_cron_job", Description: "Update a cron job (partial — absent fields are left untouched)", Annotations: additiveAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in UpdateCronJobIn) (*mcp.CallToolResult, any, error) {
+				path := "/cron/" + url.PathEscape(in.CronId)
+				body := map[string]any{}
+				if in.Command != "" {
+					body["command"] = in.Command
+				}
+				if in.Enabled != nil {
+					body["enabled"] = *in.Enabled
+				}
+				if in.Name != "" {
+					body["name"] = in.Name
+				}
+				if in.Schedule != "" {
+					body["schedule"] = in.Schedule
+				}
+				return runWrite(ctx, reg, in, false, "", reqSpec{http.MethodPatch, path, body})
+			})
+	}
+	{
+		type RunCronJobIn struct {
+			panelArg
+			dryRunArg
+			CronId string `json:"cron_id" jsonschema:"the cron's ULID"`
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "run_cron_job", Description: "Run a cron job immediately (409 if the job is disabled)", Annotations: additiveAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in RunCronJobIn) (*mcp.CallToolResult, any, error) {
+				path := "/cron/" + url.PathEscape(in.CronId) + "/run-now"
+				return runWrite(ctx, reg, in, false, "", reqSpec{http.MethodPost, path, nil})
+			})
+	}
+	{
+		type CreateDatabaseUserIn struct {
+			panelArg
+			dryRunArg
+			Engine   string `json:"engine,omitempty" jsonschema:"database engine (default mariadb)"`
+			Username string `json:"username" jsonschema:"login name (your account prefix is enforced)"`
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "create_database_user", Description: "Create a database user (returns its password once)", Annotations: additiveAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in CreateDatabaseUserIn) (*mcp.CallToolResult, any, error) {
+				path := "/database-users"
+				body := map[string]any{}
+				if in.Engine != "" {
+					body["engine"] = in.Engine
+				}
+				body["username"] = in.Username
+				return runWrite(ctx, reg, in, false, "", reqSpec{http.MethodPost, path, body})
+			})
+	}
+	{
+		type GrantDatabaseAccessIn struct {
+			panelArg
+			dryRunArg
+			DatabaseUserId string `json:"database_user_id" jsonschema:"the database_user's ULID"`
+			DatabaseId     string `json:"database_id" jsonschema:"the database's ULID"`
+			GrantLevel     string `json:"grant_level" jsonschema:"rw = read-write, ro = read-only"`
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "grant_database_access", Description: "Grant a database user access to one of your databases", Annotations: additiveAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in GrantDatabaseAccessIn) (*mcp.CallToolResult, any, error) {
+				if r := vEnum("grant_level", in.GrantLevel, []string{"rw", "ro"}); r != nil {
+					return r, nil, nil
+				}
+				path := "/database-users/" + url.PathEscape(in.DatabaseUserId) + "/grants"
+				body := map[string]any{}
+				body["database_id"] = in.DatabaseId
+				body["grant_level"] = in.GrantLevel
+				return runWrite(ctx, reg, in, false, "", reqSpec{http.MethodPost, path, body})
+			})
+	}
+	{
+		type UpdateMailboxIn struct {
+			panelArg
+			dryRunArg
+			MailboxId   string `json:"mailbox_id" jsonschema:"the mailbox's ULID"`
+			DisplayName string `json:"display_name,omitempty" jsonschema:"display name shown in webmail"`
+			IsDisabled  *bool  `json:"is_disabled,omitempty" jsonschema:"disable login + delivery for this mailbox"`
+			QuotaBytes  int    `json:"quota_bytes,omitempty" jsonschema:"mailbox quota in bytes (min 16 MiB)"`
+			SendOnly    *bool  `json:"send_only,omitempty" jsonschema:"mailbox may send but not receive"`
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "update_mailbox", Description: "Update a mailbox (partial — absent fields are left untouched)", Annotations: additiveAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in UpdateMailboxIn) (*mcp.CallToolResult, any, error) {
+				if in.QuotaBytes != 0 {
+					if r := vMin("quota_bytes", in.QuotaBytes, 16777216); r != nil {
+						return r, nil, nil
+					}
+				}
+				path := "/mailboxes/" + url.PathEscape(in.MailboxId)
+				body := map[string]any{}
+				if in.DisplayName != "" {
+					body["display_name"] = in.DisplayName
+				}
+				if in.IsDisabled != nil {
+					body["is_disabled"] = *in.IsDisabled
+				}
+				if in.QuotaBytes != 0 {
+					body["quota_bytes"] = in.QuotaBytes
+				}
+				if in.SendOnly != nil {
+					body["send_only"] = *in.SendOnly
+				}
+				return runWrite(ctx, reg, in, false, "", reqSpec{http.MethodPatch, path, body})
+			})
+	}
+	{
+		type SetAutoresponderIn struct {
+			panelArg
+			dryRunArg
+			MailboxId string `json:"mailbox_id" jsonschema:"the mailbox's ULID"`
+			Enabled   bool   `json:"enabled" jsonschema:"turn the autoresponder on or off"`
+			FromDate  string `json:"from_date,omitempty" jsonschema:"start (RFC 3339, e.g. 2026-08-10T00:00:00Z); omit for immediate"`
+			HtmlBody  string `json:"html_body,omitempty" jsonschema:"HTML reply body"`
+			Subject   string `json:"subject,omitempty" jsonschema:"reply subject"`
+			TextBody  string `json:"text_body,omitempty" jsonschema:"plain-text reply body"`
+			ToDate    string `json:"to_date,omitempty" jsonschema:"end (RFC 3339); omit for open-ended"`
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "set_autoresponder", Description: "Set a mailbox's autoresponder (vacation reply)", Annotations: additiveAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in SetAutoresponderIn) (*mcp.CallToolResult, any, error) {
+				path := "/mailboxes/" + url.PathEscape(in.MailboxId) + "/autoresponder"
+				body := map[string]any{}
+				body["enabled"] = in.Enabled
+				if in.FromDate != "" {
+					body["from_date"] = in.FromDate
+				}
+				if in.HtmlBody != "" {
+					body["html_body"] = in.HtmlBody
+				}
+				if in.Subject != "" {
+					body["subject"] = in.Subject
+				}
+				if in.TextBody != "" {
+					body["text_body"] = in.TextBody
+				}
+				if in.ToDate != "" {
+					body["to_date"] = in.ToDate
+				}
+				return runWrite(ctx, reg, in, false, "", reqSpec{http.MethodPut, path, body})
+			})
+	}
+	{
+		type AddSshKeyIn struct {
+			panelArg
+			dryRunArg
+			Name      string `json:"name" jsonschema:"key label, e.g. laptop"`
+			PublicKey string `json:"public_key" jsonschema:"OpenSSH public key line (ed25519 or RSA >= 2048 bits)"`
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "add_ssh_key", Description: "Add an SSH public key for SFTP/SSH access", Annotations: additiveAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in AddSshKeyIn) (*mcp.CallToolResult, any, error) {
+				path := "/ssh-keys"
+				body := map[string]any{}
+				body["name"] = in.Name
+				body["public_key"] = in.PublicKey
+				return runWrite(ctx, reg, in, false, "", reqSpec{http.MethodPost, path, body})
+			})
+	}
+	{
+		type UpdatePhpSettingsIn struct {
+			panelArg
+			dryRunArg
+			DomainId             string `json:"domain_id" jsonschema:"the domain's ULID"`
+			PhpMaxExecutionTime  int    `json:"php_max_execution_time,omitempty" jsonschema:"script time limit, seconds"`
+			PhpMaxInputTime      int    `json:"php_max_input_time,omitempty" jsonschema:"input parsing time limit, seconds"`
+			PhpMaxInputVars      int    `json:"php_max_input_vars,omitempty" jsonschema:"max request input variables"`
+			PhpMemoryLimit       string `json:"php_memory_limit,omitempty" jsonschema:"digits + optional K/M/G suffix, e.g. 256M"`
+			PhpPostMaxSize       string `json:"php_post_max_size,omitempty" jsonschema:"digits + optional K/M/G suffix, e.g. 64M"`
+			PhpUploadMaxFilesize string `json:"php_upload_max_filesize,omitempty" jsonschema:"digits + optional K/M/G suffix, e.g. 64M"`
+			PhpVersion           string `json:"php_version,omitempty" jsonschema:"e.g. 8.3 — must be installed on the server (see list_php_versions); changes the pool shared by ALL your domains"`
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "update_php_settings", Description: "Update a domain's PHP settings (partial — absent fields are left untouched)", Annotations: additiveAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in UpdatePhpSettingsIn) (*mcp.CallToolResult, any, error) {
+				if in.PhpMaxExecutionTime != 0 {
+					if r := vMin("php_max_execution_time", in.PhpMaxExecutionTime, 1); r != nil {
+						return r, nil, nil
+					}
+					if r := vMax("php_max_execution_time", in.PhpMaxExecutionTime, 86400); r != nil {
+						return r, nil, nil
+					}
+				}
+				if in.PhpMaxInputTime != 0 {
+					if r := vMin("php_max_input_time", in.PhpMaxInputTime, 1); r != nil {
+						return r, nil, nil
+					}
+					if r := vMax("php_max_input_time", in.PhpMaxInputTime, 86400); r != nil {
+						return r, nil, nil
+					}
+				}
+				if in.PhpMaxInputVars != 0 {
+					if r := vMin("php_max_input_vars", in.PhpMaxInputVars, 1); r != nil {
+						return r, nil, nil
+					}
+					if r := vMax("php_max_input_vars", in.PhpMaxInputVars, 86400); r != nil {
+						return r, nil, nil
+					}
+				}
+				path := "/domains/" + url.PathEscape(in.DomainId) + "/php-settings"
+				body := map[string]any{}
+				if in.PhpMaxExecutionTime != 0 {
+					body["php_max_execution_time"] = in.PhpMaxExecutionTime
+				}
+				if in.PhpMaxInputTime != 0 {
+					body["php_max_input_time"] = in.PhpMaxInputTime
+				}
+				if in.PhpMaxInputVars != 0 {
+					body["php_max_input_vars"] = in.PhpMaxInputVars
+				}
+				if in.PhpMemoryLimit != "" {
+					body["php_memory_limit"] = in.PhpMemoryLimit
+				}
+				if in.PhpPostMaxSize != "" {
+					body["php_post_max_size"] = in.PhpPostMaxSize
+				}
+				if in.PhpUploadMaxFilesize != "" {
+					body["php_upload_max_filesize"] = in.PhpUploadMaxFilesize
+				}
+				if in.PhpVersion != "" {
+					body["php_version"] = in.PhpVersion
+				}
+				return runWrite(ctx, reg, in, false, "", reqSpec{http.MethodPatch, path, body})
+			})
+	}
+	{
 		type DeleteDomainIn struct {
 			panelArg
 			dryRunArg
@@ -480,6 +1033,168 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 				path := "/me/backups/" + url.PathEscape(in.BackupId) + "/restore"
 				preview := "Destructive, irreversible — Restore a snapshot. Target: " + path
 				return runWrite(ctx, reg, in, true, preview, reqSpec{http.MethodPost, path, nil})
+			})
+	}
+	{
+		type DisableSslIn struct {
+			panelArg
+			dryRunArg
+			confirmArg
+			DomainId string `json:"domain_id" jsonschema:"the domain's ULID"`
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "disable_ssl", Description: "Disable SSL — revoke the domain's certificate and stop serving HTTPS", Annotations: destructiveAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in DisableSslIn) (*mcp.CallToolResult, any, error) {
+				path := "/domains/" + url.PathEscape(in.DomainId) + "/ssl"
+				preview := "Destructive, irreversible — Disable SSL — revoke the domain's certificate and stop serving HTTPS. Target: " + path
+				return runWrite(ctx, reg, in, true, preview, reqSpec{http.MethodDelete, path, nil})
+			})
+	}
+	{
+		type DeleteCronJobIn struct {
+			panelArg
+			dryRunArg
+			confirmArg
+			CronId string `json:"cron_id" jsonschema:"the cron's ULID"`
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "delete_cron_job", Description: "Delete a cron job", Annotations: destructiveAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in DeleteCronJobIn) (*mcp.CallToolResult, any, error) {
+				path := "/cron/" + url.PathEscape(in.CronId)
+				preview := "Destructive, irreversible — Delete a cron job. Target: " + path
+				return runWrite(ctx, reg, in, true, preview, reqSpec{http.MethodDelete, path, nil})
+			})
+	}
+	{
+		type DeleteApplicationIn struct {
+			panelArg
+			dryRunArg
+			confirmArg
+			ApplicationId string `json:"application_id" jsonschema:"the application's ULID"`
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "delete_application", Description: "Uninstall an app and remove its files (async)", Annotations: destructiveAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in DeleteApplicationIn) (*mcp.CallToolResult, any, error) {
+				path := "/applications/" + url.PathEscape(in.ApplicationId)
+				preview := "Destructive, irreversible — Uninstall an app and remove its files (async). Target: " + path
+				return runWrite(ctx, reg, in, true, preview, reqSpec{http.MethodDelete, path, nil})
+			})
+	}
+	{
+		type DeleteDatabaseIn struct {
+			panelArg
+			dryRunArg
+			confirmArg
+			DatabasId string `json:"databas_id" jsonschema:"the databas's ULID"`
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "delete_database", Description: "Drop a database and all its data", Annotations: destructiveAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in DeleteDatabaseIn) (*mcp.CallToolResult, any, error) {
+				path := "/databases/" + url.PathEscape(in.DatabasId)
+				preview := "Destructive, irreversible — Drop a database and all its data. Target: " + path
+				return runWrite(ctx, reg, in, true, preview, reqSpec{http.MethodDelete, path, nil})
+			})
+	}
+	{
+		type DeleteDatabaseUserIn struct {
+			panelArg
+			dryRunArg
+			confirmArg
+			DatabaseUserId string `json:"database_user_id" jsonschema:"the database_user's ULID"`
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "delete_database_user", Description: "Delete a database user (revokes all its grants)", Annotations: destructiveAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in DeleteDatabaseUserIn) (*mcp.CallToolResult, any, error) {
+				path := "/database-users/" + url.PathEscape(in.DatabaseUserId)
+				preview := "Destructive, irreversible — Delete a database user (revokes all its grants). Target: " + path
+				return runWrite(ctx, reg, in, true, preview, reqSpec{http.MethodDelete, path, nil})
+			})
+	}
+	{
+		type RevokeDatabaseAccessIn struct {
+			panelArg
+			dryRunArg
+			confirmArg
+			DatabaseUserGrantId string `json:"database_user_grant_id" jsonschema:"the database_user_grant's ULID"`
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "revoke_database_access", Description: "Revoke one database grant (keeps the user)", Annotations: destructiveAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in RevokeDatabaseAccessIn) (*mcp.CallToolResult, any, error) {
+				path := "/database-user-grants/" + url.PathEscape(in.DatabaseUserGrantId)
+				preview := "Destructive, irreversible — Revoke one database grant (keeps the user). Target: " + path
+				return runWrite(ctx, reg, in, true, preview, reqSpec{http.MethodDelete, path, nil})
+			})
+	}
+	{
+		type RotateDatabasePasswordIn struct {
+			panelArg
+			dryRunArg
+			confirmArg
+			DatabaseUserId string `json:"database_user_id" jsonschema:"the database_user's ULID"`
+			NewPassword    string `json:"new_password" jsonschema:"the new password to set"`
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "rotate_database_password", Description: "Rotate a database user's password (returns the new password once)", Annotations: destructiveAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in RotateDatabasePasswordIn) (*mcp.CallToolResult, any, error) {
+				path := "/database-users/" + url.PathEscape(in.DatabaseUserId) + "/rotate-password"
+				body := map[string]any{}
+				body["new_password"] = in.NewPassword
+				preview := "Destructive, irreversible — Rotate a database user's password (returns the new password once). Target: " + path
+				return runWrite(ctx, reg, in, true, preview, reqSpec{http.MethodPost, path, body})
+			})
+	}
+	{
+		type DeleteAutoresponderIn struct {
+			panelArg
+			dryRunArg
+			confirmArg
+			MailboxId string `json:"mailbox_id" jsonschema:"the mailbox's ULID"`
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "delete_autoresponder", Description: "Remove a mailbox's autoresponder", Annotations: destructiveAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in DeleteAutoresponderIn) (*mcp.CallToolResult, any, error) {
+				path := "/mailboxes/" + url.PathEscape(in.MailboxId) + "/autoresponder"
+				preview := "Destructive, irreversible — Remove a mailbox's autoresponder. Target: " + path
+				return runWrite(ctx, reg, in, true, preview, reqSpec{http.MethodDelete, path, nil})
+			})
+	}
+	{
+		type RotateMailboxPasswordIn struct {
+			panelArg
+			dryRunArg
+			confirmArg
+			MailboxId   string `json:"mailbox_id" jsonschema:"the mailbox's ULID"`
+			NewPassword string `json:"new_password,omitempty" jsonschema:"omit to auto-generate a strong password"`
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "rotate_mailbox_password", Description: "Rotate a mailbox password (returns the new password once)", Annotations: destructiveAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in RotateMailboxPasswordIn) (*mcp.CallToolResult, any, error) {
+				path := "/mailboxes/" + url.PathEscape(in.MailboxId) + "/rotate-password"
+				body := map[string]any{}
+				if in.NewPassword != "" {
+					body["new_password"] = in.NewPassword
+				}
+				preview := "Destructive, irreversible — Rotate a mailbox password (returns the new password once). Target: " + path
+				return runWrite(ctx, reg, in, true, preview, reqSpec{http.MethodPost, path, body})
+			})
+	}
+	{
+		type DeleteBackupIn struct {
+			panelArg
+			dryRunArg
+			confirmArg
+			BackupId string `json:"backup_id" jsonschema:"the backup's ULID"`
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "delete_backup", Description: "Delete a snapshot (forgets + prunes its data)", Annotations: destructiveAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in DeleteBackupIn) (*mcp.CallToolResult, any, error) {
+				path := "/me/backups/" + url.PathEscape(in.BackupId)
+				preview := "Destructive, irreversible — Delete a snapshot (forgets + prunes its data). Target: " + path
+				return runWrite(ctx, reg, in, true, preview, reqSpec{http.MethodDelete, path, nil})
+			})
+	}
+	{
+		type DeleteSshKeyIn struct {
+			panelArg
+			dryRunArg
+			confirmArg
+			SshKeyId string `json:"ssh_key_id" jsonschema:"the ssh_key's ULID"`
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "delete_ssh_key", Description: "Remove an SSH key (revokes its access)", Annotations: destructiveAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in DeleteSshKeyIn) (*mcp.CallToolResult, any, error) {
+				path := "/ssh-keys/" + url.PathEscape(in.SshKeyId)
+				preview := "Destructive, irreversible — Remove an SSH key (revokes its access). Target: " + path
+				return runWrite(ctx, reg, in, true, preview, reqSpec{http.MethodDelete, path, nil})
 			})
 	}
 }

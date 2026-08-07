@@ -292,7 +292,9 @@ func pathParamName(path, specName string) string {
 	placeholder := "{" + specName + "}"
 	for i, s := range segs {
 		if s == placeholder && i > 0 {
-			return singular(segs[i-1]) + "_id"
+			// Hyphenated segments (e.g. database-users) must yield a valid Go
+			// identifier and a snake_case JSON name.
+			return strings.ReplaceAll(singular(segs[i-1]), "-", "_") + "_id"
 		}
 	}
 	return specName

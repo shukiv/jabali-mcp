@@ -11,3 +11,7 @@ tools:
   - { op: "GET /admin/settings",      name: admin_get_settings,    group: read }
   - { op: "PATCH /admin/settings",    name: admin_update_settings, group: write }
   - { op: "POST /admin/updates/run",  name: admin_run_updates,     group: write, destructive: true }
+  # SSL ops that live under tenant paths but are RequireAdmin in the panel
+  # (verified in panel-api/internal/api/ssl.go — renewSSL/retrySSL).
+  - { op: "POST /domains/{id}/ssl/renew", name: admin_renew_ssl,   group: write }
+  - { op: "POST /domains/{id}/ssl/retry", name: admin_retry_ssl,   group: write }

@@ -268,7 +268,9 @@ group**, exposed only with `JABALI_MCP_ADMIN=1`. It fronts whole-box operations 
 a far larger blast radius than the tenant tools — so it is deliberately opt-in and
 requires an **admin token** (the panel's `RequireAdmin` rejects a non-admin token
 with 403 regardless of the flag). Admin write tools still need `ALLOW_WRITE`, and
-`admin_run_updates` is confirm-gated. Give the admin server its own admin token;
+`admin_run_updates` is confirm-gated. `admin_renew_ssl` and `admin_retry_ssl`
+also live here: their paths look tenant-scoped, but the panel registers them
+behind `RequireAdmin`. Give the admin server its own admin token;
 use tenant tokens for everything else.
 
 ## Auth model — inherits the panel's tenant isolation
@@ -283,11 +285,11 @@ that tenant. That is why a non-admin token is the safe default.
 This fronts a hosting control plane, so mutation is fenced in four layers:
 
 1. **Read-only by default.** Write tools register only with `JABALI_MCP_ALLOW_WRITE=1`.
-2. **Destructive tools require `confirm: true`.** `delete_domain`,
-   `delete_dns_record`, `delete_mailbox`, `set_mailbox_password`, and
-   `restore_backup` return a preview and act only when re-called with
-   `confirm: true`. A model cannot destroy state in one step — the guard against
-   a prompt-injected tool call.
+2. **Destructive tools require `confirm: true`.** Every `delete_*` /
+   `revoke_*` / `rotate_*_password` tool (plus `set_mailbox_password`,
+   `restore_backup`, `disable_ssl`) returns a preview and acts only when
+   re-called with `confirm: true`. A model cannot destroy state in one step —
+   the guard against a prompt-injected tool call.
 3. **Tool hints.** Read tools carry `readOnlyHint`; destructive tools carry
    `destructiveHint` so clients can surface the risk.
 4. **Dry-run.** Any write tool accepts `dry_run: true` to return the exact
@@ -302,13 +304,29 @@ verification.
 
 **Read (always on):** `list_domains`, `get_domain`, `list_dns_records`,
 `list_mailboxes`, `list_forwarders`, `list_applications`, `list_databases`,
-`list_backups`, `list_api_tokens`, `list_mail_logs`, `tail_web_log`.
+`list_backups`, `list_api_tokens`, `list_mail_logs`, `tail_web_log`,
+`get_ssl_status`, `get_domain_whois`, `get_domain_bandwidth`, `whoami`,
+`get_disk_usage`, `list_activity`, `list_cron_jobs`, `get_cron_job`,
+`get_cron_log`, `list_app_catalog`, `get_application`, `get_database`,
+`list_database_users`, `get_mailbox`, `get_autoresponder`,
+`get_backup_manifest`, `list_ssh_keys`, `get_php_settings`,
+`list_php_versions`, `list_files`, `preview_file`.
+
+> `preview_file` reads file contents (up to 1 MiB) into the conversation — that
+> can include secrets such as `wp-config.php`. `create_database_user` and the
+> `rotate_*_password` tools return the plaintext secret once, by panel design.
 
 **Write (needs `JABALI_MCP_ALLOW_WRITE=1`):** `create_domain`, `update_domain`,
 `create_dns_record`, `update_dns_record`, `create_mailbox`, `create_forwarder`,
-`create_backup`, `install_application`, `create_database` — plus the
-confirm-gated destructive set: `delete_domain`, `delete_dns_record`,
-`delete_mailbox`, `set_mailbox_password`, `restore_backup`.
+`create_backup`, `install_application`, `create_database`, `enable_ssl`,
+`create_cron_job`, `update_cron_job`, `run_cron_job`, `create_database_user`,
+`grant_database_access`, `update_mailbox`, `set_autoresponder`, `add_ssh_key`,
+`update_php_settings` — plus the confirm-gated destructive set: `delete_domain`,
+`delete_dns_record`, `delete_mailbox`, `set_mailbox_password`, `restore_backup`,
+`disable_ssl`, `delete_cron_job`, `delete_application`, `delete_database`,
+`delete_database_user`, `revoke_database_access`, `rotate_database_password`,
+`delete_autoresponder`, `rotate_mailbox_password`, `delete_backup`,
+`delete_ssh_key`.
 
 ## Tool generation
 

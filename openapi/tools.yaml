@@ -25,6 +25,27 @@ tools:
   - { op: "GET /me/api-tokens",              name: list_api_tokens,   group: read, paginated: true }
   - { op: "GET /mail/logs",                  name: list_mail_logs,    group: read }
   - { op: "GET /logs/tail",                  name: tail_web_log,      group: read }
+  - { op: "GET /domains/{id}/ssl",           name: get_ssl_status,    group: read }
+  - { op: "GET /domains/{id}/whois",         name: get_domain_whois,  group: read }
+  - { op: "GET /domains/{id}/bandwidth",     name: get_domain_bandwidth, group: read }
+  - { op: "GET /me",                         name: whoami,            group: read }
+  - { op: "GET /me/disk-usage",              name: get_disk_usage,    group: read }
+  - { op: "GET /me/activity",                name: list_activity,     group: read, paginated: true }
+  - { op: "GET /cron",                       name: list_cron_jobs,    group: read }
+  - { op: "GET /cron/{id}",                  name: get_cron_job,      group: read }
+  - { op: "GET /cron/{id}/log",              name: get_cron_log,      group: read }
+  - { op: "GET /applications/registry",      name: list_app_catalog,  group: read }
+  - { op: "GET /applications/{id}",          name: get_application,   group: read }
+  - { op: "GET /databases/{id}",             name: get_database,      group: read }
+  - { op: "GET /database-users",             name: list_database_users, group: read }
+  - { op: "GET /mailboxes/{id}",             name: get_mailbox,       group: read }
+  - { op: "GET /mailboxes/{id}/autoresponder", name: get_autoresponder, group: read }
+  - { op: "GET /me/backups/{id}/manifest",   name: get_backup_manifest, group: read }
+  - { op: "GET /ssh-keys",                   name: list_ssh_keys,     group: read }
+  - { op: "GET /domains/{id}/php-settings",  name: get_php_settings,  group: read }
+  - { op: "GET /php/versions",               name: list_php_versions, group: read }
+  - { op: "GET /files",                      name: list_files,        group: read }
+  - { op: "GET /files/preview",              name: preview_file,      group: read }
 
   # --- Write (additive) ---
   - { op: "POST /domains",                   name: create_domain,     group: write }
@@ -36,6 +57,16 @@ tools:
   - { op: "POST /me/backups",                name: create_backup,     group: write }
   - { op: "POST /applications",              name: install_application, group: write }
   - { op: "POST /databases",                 name: create_database,   group: write }
+  - { op: "POST /domains/{id}/ssl",          name: enable_ssl,        group: write }
+  - { op: "POST /cron",                      name: create_cron_job,   group: write }
+  - { op: "PATCH /cron/{id}",                name: update_cron_job,   group: write }
+  - { op: "POST /cron/{id}/run-now",         name: run_cron_job,      group: write }
+  - { op: "POST /database-users",            name: create_database_user, group: write }
+  - { op: "POST /database-users/{id}/grants", name: grant_database_access, group: write }
+  - { op: "PATCH /mailboxes/{id}",           name: update_mailbox,    group: write }
+  - { op: "PUT /mailboxes/{id}/autoresponder", name: set_autoresponder, group: write }
+  - { op: "POST /ssh-keys",                  name: add_ssh_key,       group: write }
+  - { op: "PATCH /domains/{id}/php-settings", name: update_php_settings, group: write }
 
   # --- Write (destructive; confirm-gated) ---
   - { op: "DELETE /domains/{id}",            name: delete_domain,        group: write, destructive: true }
@@ -43,3 +74,14 @@ tools:
   - { op: "DELETE /mailboxes/{id}",          name: delete_mailbox,       group: write, destructive: true }
   - { op: "PUT /mailboxes/{id}/password",    name: set_mailbox_password, group: write, destructive: true }
   - { op: "POST /me/backups/{id}/restore",   name: restore_backup,       group: write, destructive: true }
+  - { op: "DELETE /domains/{id}/ssl",        name: disable_ssl,          group: write, destructive: true }
+  - { op: "DELETE /cron/{id}",               name: delete_cron_job,      group: write, destructive: true }
+  - { op: "DELETE /applications/{id}",       name: delete_application,   group: write, destructive: true }
+  - { op: "DELETE /databases/{id}",          name: delete_database,      group: write, destructive: true }
+  - { op: "DELETE /database-users/{id}",     name: delete_database_user, group: write, destructive: true }
+  - { op: "DELETE /database-user-grants/{id}", name: revoke_database_access, group: write, destructive: true }
+  - { op: "POST /database-users/{id}/rotate-password", name: rotate_database_password, group: write, destructive: true }
+  - { op: "DELETE /mailboxes/{id}/autoresponder", name: delete_autoresponder, group: write, destructive: true }
+  - { op: "POST /mailboxes/{id}/rotate-password", name: rotate_mailbox_password, group: write, destructive: true }
+  - { op: "DELETE /me/backups/{id}",         name: delete_backup,        group: write, destructive: true }
+  - { op: "DELETE /ssh-keys/{id}",           name: delete_ssh_key,       group: write, destructive: true }
