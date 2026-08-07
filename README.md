@@ -18,7 +18,7 @@
   <img src="https://img.shields.io/badge/status-working_MVP-f59e0b" alt="Working MVP">
   <img src="https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&logoColor=white" alt="Go 1.25">
   <img src="https://img.shields.io/badge/MCP-stdio-6E56CF" alt="MCP stdio">
-  <img src="https://img.shields.io/badge/License-MIT-blue" alt="MIT">
+  <img src="https://img.shields.io/badge/License-AGPL--3.0-blue" alt="AGPL-3.0">
 </p>
 
 Lets an AI assistant drive panel operations — domains, DNS, mail, applications,
@@ -347,4 +347,5 @@ docs/DESIGN.md      architecture, security model, roadmap
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+GNU Affero General Public License v3.0 — see [LICENSE](LICENSE). Same license as
+[Jabali Panel](https://github.com/shukiv/jabali-panel).
