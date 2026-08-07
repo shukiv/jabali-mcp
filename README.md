@@ -345,6 +345,7 @@ internal/tools/     tools.go (helpers + gate) + generated.go (the tools)
 internal/gen/       openapi.yaml + tools.yaml -> generated.go
 openapi/            vendored spec + curation
 docs/DESIGN.md      architecture, security model, roadmap
+HANDOVER.md         full project handover: decisions, traps, release process
 ```
 
 ## Roadmap
@@ -357,7 +358,11 @@ docs/DESIGN.md      architecture, security model, roadmap
 - **Dry-run** ✅ per-call `dry_run` + global `JABALI_MCP_DRY_RUN`.
 - **Input validation** ✅ generated per-tool checks for the spec's value
   constraints (enum, minLength, min/max) — fail fast before any request.
-- **Next:** admin tools behind their own opt-in.
+- **Admin tools** ✅ `/admin/*` surface behind `JABALI_MCP_ADMIN=1` + an admin
+  token, same binary.
+- **Logs** ✅ `list_mail_logs` + `tail_web_log` (panel gained `GET /logs/tail`).
+- **Next:** richer InputSchema (constraints visible to clients), composite
+  diagnostics (`diagnose_domain`), CLI mode.
 
 ## License
 
