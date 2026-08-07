@@ -29,7 +29,7 @@ import (
 
 // version is set at build time via -ldflags "-X main.version=..."; the default
 // tracks the latest release tag for `go run …@vX.Y.Z` (which doesn't ldflag).
-var version = "0.3.0"
+var version = "0.3.1"
 
 func main() {
 	if len(os.Args) > 1 {
