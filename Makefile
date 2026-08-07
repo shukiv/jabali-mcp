@@ -2,7 +2,12 @@ BIN      ?= jabali-mcp
 VERSION  ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS  := -X main.version=$(VERSION)
 
-.PHONY: build gen docs test vet tidy clean
+.PHONY: build gen docs test vet tidy clean smoke
+
+# Zero-mutation live smoke against the configured panel. Run before tagging;
+# exits non-zero on any failure (never pipe it — that masks the exit code).
+smoke: build
+	go run ./scripts/smoke ./$(BIN)
 
 build:
 	go build -ldflags "$(LDFLAGS)" -o $(BIN) ./cmd/jabali-mcp

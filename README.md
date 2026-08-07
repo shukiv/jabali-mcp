@@ -363,7 +363,7 @@ make test      # go test -race ./...
 make vet       # go vet ./...
 
 # zero-mutation live smoke against your configured panel (run before a release):
-make build && go run ./scripts/smoke ./jabali-mcp
+make smoke
 ```
 
 ## Layout
