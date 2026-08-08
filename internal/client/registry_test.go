@@ -31,6 +31,40 @@ func TestSavePanelsRoundTrip(t *testing.T) {
 	}
 }
 
+func TestSavePanelsForcesPermsOnOverwrite(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "panels.json")
+	// Pre-existing world-readable file, e.g. written by hand or another tool.
+	if err := os.WriteFile(path, []byte("[]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := SavePanels(path, []Config{{Name: "a", BaseURL: "https://a/api/v1", Token: "jat_a"}}); err != nil {
+		t.Fatalf("SavePanels: %v", err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Errorf("perms after overwrite = %o, want 600", info.Mode().Perm())
+	}
+}
+
+func TestPlainHTTPPanels(t *testing.T) {
+	reg, err := NewRegistry([]Config{
+		{Name: "secure", BaseURL: "https://panel.example:8443/api/v1", Token: "jat_a"},
+		{Name: "remote-http", BaseURL: "http://panel.example:8443/api/v1", Token: "jat_b"},
+		{Name: "local-http", BaseURL: "http://127.0.0.1:8443/api/v1", Token: "jat_c"},
+		{Name: "localhost-http", BaseURL: "http://localhost:8443/api/v1", Token: "jat_d"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := reg.PlainHTTPPanels()
+	if len(got) != 1 || got[0] != "remote-http" {
+		t.Errorf("PlainHTTPPanels = %v, want [remote-http]", got)
+	}
+}
+
 func TestLoadOptionsFromPanelsFileEnv(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "panels.json")
 	if err := SavePanels(path, []Config{{Name: "only", BaseURL: "https://x/api/v1", Token: "jat_x"}}); err != nil {

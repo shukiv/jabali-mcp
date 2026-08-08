@@ -200,6 +200,9 @@ func buildModel(spec *oapiSpec, ct curatedTool) (toolModel, error) {
 				Desc:     "the " + strings.TrimSuffix(jsonName, "_id") + "'s ULID",
 			})
 		case "query":
+			if err := checkFieldType(ct.Name, p.Name, p.Schema); err != nil {
+				return m, err
+			}
 			m.QueryParams = append(m.QueryParams, field{
 				JSONName: p.Name,
 				GoName:   camel(p.Name),
@@ -212,6 +215,13 @@ func buildModel(spec *oapiSpec, ct curatedTool) (toolModel, error) {
 				MinLen:   p.Schema.MinLength,
 			})
 		}
+	}
+
+	// listQuery already appends "?page=…" — a tool that also has spec query
+	// parameters would emit a second "?" and a malformed URL. Refuse the
+	// combination instead of generating broken code.
+	if m.Paginated && len(m.QueryParams) > 0 {
+		return m, fmt.Errorf("tool %q: paginated already adds page/page_size/q; spec query parameters on the same tool would produce two query strings", ct.Name)
 	}
 
 	if op.RequestBody != nil {
@@ -228,6 +238,9 @@ func buildModel(spec *oapiSpec, ct curatedTool) (toolModel, error) {
 			}
 			for _, n := range names {
 				ps := bs.Properties[n]
+				if err := checkFieldType(ct.Name, n, ps); err != nil {
+					return m, err
+				}
 				m.BodyFields = append(m.BodyFields, field{
 					JSONName: n,
 					GoName:   camel(n),
@@ -258,10 +271,32 @@ func resolve(spec *oapiSpec, s schema) schema {
 	return s
 }
 
+// checkFieldType rejects schema shapes the emitter cannot represent loudly,
+// instead of silently mis-typing them: anything outside
+// string/integer/number/boolean would be coerced to string by goType (e.g. an
+// array like UserAPITokenCreate.scopes), and minimum/maximum on a float field
+// would emit uncompilable int-typed vMin/vMax calls.
+func checkFieldType(tool, name string, s schema) error {
+	switch s.Type {
+	case "string", "integer", "boolean":
+		return nil
+	case "number":
+		if s.Minimum != nil || s.Maximum != nil {
+			return fmt.Errorf("tool %q: field %q: type number with minimum/maximum is not supported (validators are int-typed)", tool, name)
+		}
+		return nil
+	default:
+		return fmt.Errorf("tool %q: field %q: unsupported schema type %q (want string|integer|number|boolean)", tool, name, s.Type)
+	}
+}
+
 func goType(s schema, required bool) string {
 	switch s.Type {
 	case "integer":
-		return "int"
+		if required {
+			return "int"
+		}
+		return "*int" // optional int: nil = omit (0 is meaningful, e.g. an MX priority of 0)
 	case "number":
 		return "float64"
 	case "boolean":
@@ -302,10 +337,15 @@ func pathParamName(path, specName string) string {
 
 func singular(s string) string {
 	switch {
-	case strings.HasSuffix(s, "ses"), strings.HasSuffix(s, "xes"), strings.HasSuffix(s, "zes"),
+	case strings.HasSuffix(s, "sses"), strings.HasSuffix(s, "xes"), strings.HasSuffix(s, "zes"),
 		strings.HasSuffix(s, "ches"), strings.HasSuffix(s, "shes"):
+		// Sibilant plurals take "+es" (mailbox→mailboxes, address→addresses):
+		// strip "es".
 		return strings.TrimSuffix(s, "es")
 	case strings.HasSuffix(s, "s"):
+		// Plain "+s" plurals strip only the "s" — "databases"→"database",
+		// "domains"→"domain". ("sses" matched above, so a bare "ses" here is
+		// "...ase"-style, not sibilant.)
 		return strings.TrimSuffix(s, "s")
 	default:
 		return s
@@ -463,6 +503,14 @@ func emitTool(b *strings.Builder, m toolModel) {
 	fmt.Fprintf(b, "\t\t\tfunc(ctx context.Context, _ *mcp.CallToolRequest, in %s) (*mcp.CallToolResult, any, error) {\n", typeName)
 
 	emitValidate(b, m)
+	// Path parameters are spliced into the URL via url.PathEscape, which
+	// leaves "." untouched — a value of "." or ".." would collapse path
+	// segments and shift the route server-side (e.g. domain_id=".." turns
+	// /domains/{id}/ssl into /domains/ssl). Reject dot segments up front.
+	for _, p := range m.PathParams {
+		fmt.Fprintf(b, "\t\t\t\tif in.%s == \".\" || in.%s == \"..\" {\n\t\t\t\t\treturn errResult(%q), nil, nil\n\t\t\t\t}\n",
+			p.GoName, p.GoName, "invalid "+p.JSONName+": dot segments are not allowed")
+	}
 	fmt.Fprintf(b, "\t\t\t\tpath := %s\n", pathExpr(m))
 	if m.Paginated {
 		b.WriteString("\t\t\t\tpath += listQuery(in.Page, in.PageSize, in.Q)\n")
@@ -515,6 +563,8 @@ func emitValidate(b *strings.Builder, m toolModel) {
 				fmt.Fprintf(b, "%sif in.%s != \"\" {\n", indent, f.GoName)
 			case "int":
 				fmt.Fprintf(b, "%sif in.%s != 0 {\n", indent, f.GoName)
+			case "*int":
+				fmt.Fprintf(b, "%sif in.%s != nil {\n", indent, f.GoName)
 			default:
 				guarded = false
 			}
@@ -532,17 +582,27 @@ func emitValidate(b *strings.Builder, m toolModel) {
 				body, f.JSONName, f.GoName, *f.MinLen, body, body)
 		}
 		if f.Min != nil {
-			fmt.Fprintf(b, "%sif r := vMin(%q, in.%s, %d); r != nil {\n%s\treturn r, nil, nil\n%s}\n",
-				body, f.JSONName, f.GoName, *f.Min, body, body)
+			fmt.Fprintf(b, "%sif r := vMin(%q, %s, %d); r != nil {\n%s\treturn r, nil, nil\n%s}\n",
+				body, f.JSONName, valExpr(f), *f.Min, body, body)
 		}
 		if f.Max != nil {
-			fmt.Fprintf(b, "%sif r := vMax(%q, in.%s, %d); r != nil {\n%s\treturn r, nil, nil\n%s}\n",
-				body, f.JSONName, f.GoName, *f.Max, body, body)
+			fmt.Fprintf(b, "%sif r := vMax(%q, %s, %d); r != nil {\n%s\treturn r, nil, nil\n%s}\n",
+				body, f.JSONName, valExpr(f), *f.Max, body, body)
 		}
 		if guarded {
 			fmt.Fprintf(b, "%s}\n", indent)
 		}
 	}
+}
+
+// valExpr is the field-access expression for the int validators (vMin/vMax),
+// dereferencing optional pointer fields (*int) — the nil guard emitted around
+// them already proves the pointer is non-nil.
+func valExpr(f field) string {
+	if strings.HasPrefix(f.GoType, "*") {
+		return "*in." + f.GoName
+	}
+	return "in." + f.GoName
 }
 
 func quoteList(vals []string) string {
@@ -567,6 +627,9 @@ func emitQueryAssign(b *strings.Builder, f field) {
 	case "*bool":
 		fmt.Fprintf(b, "\t\t\t\tif in.%s != nil { q.Set(%q, strconv.FormatBool(*in.%s)) }\n", f.GoName, f.JSONName, f.GoName)
 		return
+	case "*int":
+		fmt.Fprintf(b, "\t\t\t\tif in.%s != nil { q.Set(%q, strconv.Itoa(*in.%s)) }\n", f.GoName, f.JSONName, f.GoName)
+		return
 	default:
 		val = "in." + f.GoName
 	}
@@ -577,7 +640,7 @@ func emitQueryAssign(b *strings.Builder, f field) {
 	switch f.GoType {
 	case "string":
 		fmt.Fprintf(b, "\t\t\t\tif in.%s != \"\" { q.Set(%q, %s) }\n", f.GoName, f.JSONName, val)
-	case "int", "float64":
+	case "float64":
 		fmt.Fprintf(b, "\t\t\t\tif in.%s != 0 { q.Set(%q, %s) }\n", f.GoName, f.JSONName, val)
 	default:
 		fmt.Fprintf(b, "\t\t\t\tq.Set(%q, %s)\n", f.JSONName, val)
@@ -592,9 +655,9 @@ func emitBodyAssign(b *strings.Builder, f field) {
 	switch f.GoType {
 	case "string":
 		fmt.Fprintf(b, "\t\t\t\tif in.%s != \"\" { body[%q] = in.%s }\n", f.GoName, f.JSONName, f.GoName)
-	case "int", "float64":
+	case "float64":
 		fmt.Fprintf(b, "\t\t\t\tif in.%s != 0 { body[%q] = in.%s }\n", f.GoName, f.JSONName, f.GoName)
-	case "*bool":
+	case "*int", "*bool":
 		fmt.Fprintf(b, "\t\t\t\tif in.%s != nil { body[%q] = *in.%s }\n", f.GoName, f.JSONName, f.GoName)
 	default:
 		fmt.Fprintf(b, "\t\t\t\tbody[%q] = in.%s\n", f.JSONName, f.GoName)

@@ -241,7 +241,7 @@ Get a database (engine, size, grants)
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
-| `databas_id` | string | ✓ | the databas's ULID |
+| `database_id` | string | ✓ | the database's ULID |
 
 ### list_database_users
 
@@ -656,7 +656,7 @@ Drop a database and all its data
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
-| `databas_id` | string | ✓ | the databas's ULID |
+| `database_id` | string | ✓ | the database's ULID |
 
 ### delete_database_user
 

@@ -37,10 +37,21 @@ const (
 	docsMaxPageBytes = 1 << 20 // 1 MiB
 	docsMaxResult    = 24000   // characters
 	docsCacheTTL     = 10 * time.Minute
-	docsFetchPages   = 3 // pages fetched per search
+	docsCacheMax     = 64 // entries; insert sweeps expired, then evicts one
+	docsFetchPages   = 3  // pages fetched per search
 )
 
-var docsHTTP = &http.Client{Timeout: 10 * time.Second}
+// docsHTTP refuses redirects off the docs origin: the URL was origin-checked,
+// but a same-origin page that 302s elsewhere must not be followed either.
+var docsHTTP = &http.Client{
+	Timeout: 10 * time.Second,
+	CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		if len(via) > 0 && (req.URL.Scheme != via[0].URL.Scheme || req.URL.Host != via[0].URL.Host) {
+			return fmt.Errorf("refusing off-origin redirect to %s", req.URL)
+		}
+		return nil
+	},
+}
 
 var docsCache = struct {
 	sync.Mutex
@@ -140,7 +151,7 @@ func fetchDocPage(ctx context.Context, base *url.URL, ref string) (*mcp.CallTool
 	return textResult(clipDocs(page)), nil, nil
 }
 
-// docsFetch GETs a docs URL anonymously with caching and a size cap.
+// docsFetch GETs a docs URL anonymously with a bounded TTL cache and a size cap.
 func docsFetch(ctx context.Context, rawURL string) (string, error) {
 	docsCache.Lock()
 	if e, ok := docsCache.m[rawURL]; ok && time.Since(e.at) < docsCacheTTL {
@@ -168,7 +179,19 @@ func docsFetch(ctx context.Context, rawURL string) (string, error) {
 	}
 	body := string(raw)
 	docsCache.Lock()
-	docsCache.m[rawURL] = docsCacheEntry{body: body, at: time.Now()}
+	now := time.Now()
+	for k, e := range docsCache.m { // sweep expired
+		if now.Sub(e.at) >= docsCacheTTL {
+			delete(docsCache.m, k)
+		}
+	}
+	if len(docsCache.m) >= docsCacheMax { // still full: evict one arbitrary entry
+		for k := range docsCache.m {
+			delete(docsCache.m, k)
+			break
+		}
+	}
+	docsCache.m[rawURL] = docsCacheEntry{body: body, at: now}
 	docsCache.Unlock()
 	return body, nil
 }

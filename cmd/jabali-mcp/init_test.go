@@ -65,6 +65,16 @@ func TestInitWizardWritesVerifiedPanels(t *testing.T) {
 	}
 }
 
+func TestInitWizardAbortsOnEOF(t *testing.T) {
+	// Empty stdin must abort with a clear error, not loop forever on "(required)".
+	out := filepath.Join(t.TempDir(), "panels.json")
+	var buf bytes.Buffer
+	err := runInitIO(out, false, bufio.NewReader(strings.NewReader("")), &buf)
+	if err == nil || !strings.Contains(err.Error(), "unexpected end of input") {
+		t.Errorf("expected an 'unexpected end of input' error, got %v", err)
+	}
+}
+
 func TestInitWizardSavesOnVerifyFailure(t *testing.T) {
 	// Unreachable panel: verify fails, but the panel is still saved (with a warning).
 	out := filepath.Join(t.TempDir(), "panels.json")

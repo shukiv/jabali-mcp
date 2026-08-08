@@ -24,14 +24,24 @@ import (
 const issueOwner = "shukiv"
 
 // issueRunner executes the argv (argv[0] resolved via PATH) and returns
-// trimmed stdout. Package variable so tests can inject a fake.
+// trimmed stdout; on failure stderr is folded into the error so the user sees
+// why the command failed. Package variable so tests can inject a fake.
 var issueRunner = func(ctx context.Context, argv []string) (string, error) {
 	bin, err := exec.LookPath(argv[0])
 	if err != nil {
 		return "", fmt.Errorf("%s is not installed", argv[0])
 	}
-	out, err := exec.CommandContext(ctx, bin, argv[1:]...).Output()
-	return strings.TrimSpace(string(out)), err
+	cmd := exec.CommandContext(ctx, bin, argv[1:]...)
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	if err != nil {
+		if msg := strings.TrimSpace(stderr.String()); msg != "" {
+			return "", fmt.Errorf("%w: %s", err, msg)
+		}
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
 }
 
 // issueSecretPattern is a tripwire, not the safety story: the real guard is
@@ -101,6 +111,12 @@ func registerIssueTools(s *mcp.Server, reg *client.Registry, allowWrite bool) {
 				body += "\n\n## Diagnostics (auto-attached by jabali-mcp)\n\n```json\n" +
 					diagnosticsAttachment(ctx, c, in.DiagnoseDomainId) + "\n```"
 				diagNote = "\n(diagnostics attached — review them for anything you don't want public)"
+			}
+
+			// The diagnostics blob is raw log/config text, so re-scan the final
+			// composed body — this guards both the link and the gh paths below.
+			if issueSecretPattern.MatchString(body) {
+				return errResult("refusing: the composed issue body (including diagnostics) appears to contain a secret (token or key). Redact it and retry."), nil, nil
 			}
 
 			label := "bug"

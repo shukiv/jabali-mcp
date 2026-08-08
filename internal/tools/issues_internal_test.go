@@ -14,6 +14,13 @@ import (
 	"github.com/shukiv/jabali-mcp/internal/client"
 )
 
+func TestIssueRunnerFoldsStderrIntoError(t *testing.T) {
+	_, err := issueRunner(context.Background(), []string{"sh", "-c", "echo auth required >&2; exit 1"})
+	if err == nil || !strings.Contains(err.Error(), "auth required") {
+		t.Errorf("stderr must be folded into the error, got %v", err)
+	}
+}
+
 func TestReportIssueConfirmedCreateInvokesGh(t *testing.T) {
 	orig := issueRunner
 	t.Cleanup(func() { issueRunner = orig })

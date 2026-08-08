@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -83,6 +84,21 @@ func New(cfg Config) (*Client, error) {
 
 // Name is the panel's logical name.
 func (c *Client) Name() string { return c.name }
+
+// IsPlainHTTP reports whether the client points at an http:// URL to a
+// non-loopback host. That sends the Bearer token in cleartext — fine for
+// loopback development, dangerous anywhere else.
+func (c *Client) IsPlainHTTP() bool {
+	u, err := url.Parse(c.base)
+	if err != nil || u.Scheme != "http" {
+		return false
+	}
+	switch u.Hostname() {
+	case "localhost", "127.0.0.1", "::1":
+		return false
+	}
+	return true
+}
 
 // Do sends an authenticated request and returns the raw response body and
 // status. It does not treat a non-2xx status as a Go error — the caller decides

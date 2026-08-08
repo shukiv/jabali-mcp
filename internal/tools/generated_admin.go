@@ -69,7 +69,7 @@ func registerAdminWrite(s *mcp.Server, reg *client.Registry) {
 		type AdminUpdateSettingsIn struct {
 			panelArg
 			dryRunArg
-			DefaultDnsTtl int    `json:"default_dns_ttl,omitempty" jsonschema:"Server-wide default TTL for new DNS records (seconds)."`
+			DefaultDnsTtl *int   `json:"default_dns_ttl,omitempty" jsonschema:"Server-wide default TTL for new DNS records (seconds)."`
 			Hostname      string `json:"hostname,omitempty" jsonschema:"hostname"`
 		}
 		schema := inferSchema[AdminUpdateSettingsIn]()
@@ -77,18 +77,18 @@ func registerAdminWrite(s *mcp.Server, reg *client.Registry) {
 		schema.Properties["default_dns_ttl"].Maximum = f64(86400)
 		mcp.AddTool(s, &mcp.Tool{Name: "admin_update_settings", Description: "Update server-wide settings (admin)", Annotations: additiveAnno(), InputSchema: schema},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in AdminUpdateSettingsIn) (*mcp.CallToolResult, any, error) {
-				if in.DefaultDnsTtl != 0 {
-					if r := vMin("default_dns_ttl", in.DefaultDnsTtl, 60); r != nil {
+				if in.DefaultDnsTtl != nil {
+					if r := vMin("default_dns_ttl", *in.DefaultDnsTtl, 60); r != nil {
 						return r, nil, nil
 					}
-					if r := vMax("default_dns_ttl", in.DefaultDnsTtl, 86400); r != nil {
+					if r := vMax("default_dns_ttl", *in.DefaultDnsTtl, 86400); r != nil {
 						return r, nil, nil
 					}
 				}
 				path := "/admin/settings"
 				body := map[string]any{}
-				if in.DefaultDnsTtl != 0 {
-					body["default_dns_ttl"] = in.DefaultDnsTtl
+				if in.DefaultDnsTtl != nil {
+					body["default_dns_ttl"] = *in.DefaultDnsTtl
 				}
 				if in.Hostname != "" {
 					body["hostname"] = in.Hostname
@@ -117,6 +117,9 @@ func registerAdminWrite(s *mcp.Server, reg *client.Registry) {
 		}
 		mcp.AddTool(s, &mcp.Tool{Name: "admin_renew_ssl", Description: "Force-renew a domain's certificate (admin)", Annotations: additiveAnno()},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in AdminRenewSslIn) (*mcp.CallToolResult, any, error) {
+				if in.DomainId == "." || in.DomainId == ".." {
+					return errResult("invalid domain_id: dot segments are not allowed"), nil, nil
+				}
 				path := "/domains/" + url.PathEscape(in.DomainId) + "/ssl/renew"
 				return runWrite(ctx, reg, in, false, "", reqSpec{http.MethodPost, path, nil})
 			})
@@ -129,6 +132,9 @@ func registerAdminWrite(s *mcp.Server, reg *client.Registry) {
 		}
 		mcp.AddTool(s, &mcp.Tool{Name: "admin_retry_ssl", Description: "Retry a failed certificate issuance (admin)", Annotations: additiveAnno()},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in AdminRetrySslIn) (*mcp.CallToolResult, any, error) {
+				if in.DomainId == "." || in.DomainId == ".." {
+					return errResult("invalid domain_id: dot segments are not allowed"), nil, nil
+				}
 				path := "/domains/" + url.PathEscape(in.DomainId) + "/ssl/retry"
 				return runWrite(ctx, reg, in, false, "", reqSpec{http.MethodPost, path, nil})
 			})

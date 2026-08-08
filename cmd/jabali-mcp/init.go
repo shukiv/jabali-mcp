@@ -40,14 +40,23 @@ func runInitIO(out string, noVerify bool, r *bufio.Reader, w io.Writer) error {
 	seen := map[string]bool{}
 	for i := 1; ; i++ {
 		fmt.Fprintf(w, "Panel #%d\n", i)
-		name := promptDefault(r, w, "  Name", defaultName(i, seen))
+		name, err := promptDefault(r, w, "  Name", defaultName(i, seen))
+		if err != nil {
+			return err
+		}
 		if seen[name] {
 			fmt.Fprintf(w, "  ! name %q already used; try another\n", name)
 			i--
 			continue
 		}
-		url := promptRequired(r, w, "  Panel URL (e.g. https://host:8443/api/v1)")
-		token := promptRequired(r, w, "  API token (jat_…)")
+		url, err := promptRequired(r, w, "  Panel URL (e.g. https://host:8443/api/v1)")
+		if err != nil {
+			return err
+		}
+		token, err := promptRequired(r, w, "  API token (jat_…)")
+		if err != nil {
+			return err
+		}
 		cfg := client.Config{Name: name, BaseURL: url, Token: token}
 
 		if !noVerify {
@@ -60,7 +69,11 @@ func runInitIO(out string, noVerify bool, r *bufio.Reader, w io.Writer) error {
 		cfgs = append(cfgs, cfg)
 		seen[name] = true
 
-		if !promptYesNo(r, w, "Add another panel?", false) {
+		more, err := promptYesNo(r, w, "Add another panel?", false)
+		if err != nil {
+			return err
+		}
+		if !more {
 			break
 		}
 	}
@@ -105,44 +118,62 @@ func printSnippet(w io.Writer, path string) {
 
 // --- prompt helpers (prompt to w, read a line from r) ---
 
-func promptDefault(r *bufio.Reader, w io.Writer, label, def string) string {
+// errEOF aborts the wizard when stdin ends mid-prompt (e.g. init </dev/null).
+var errEOF = fmt.Errorf("unexpected end of input")
+
+func promptDefault(r *bufio.Reader, w io.Writer, label, def string) (string, error) {
 	fmt.Fprintf(w, "%s [%s]: ", label, def)
-	s := readLine(r)
-	if s == "" {
-		return def
+	s, err := readLine(r)
+	if err != nil {
+		return "", err
 	}
-	return s
+	if s == "" {
+		return def, nil
+	}
+	return s, nil
 }
 
-func promptRequired(r *bufio.Reader, w io.Writer, label string) string {
+func promptRequired(r *bufio.Reader, w io.Writer, label string) (string, error) {
 	for {
 		fmt.Fprintf(w, "%s: ", label)
-		if s := readLine(r); s != "" {
-			return s
+		s, err := readLine(r)
+		if err != nil {
+			return "", err
+		}
+		if s != "" {
+			return s, nil
 		}
 		fmt.Fprintln(w, "  (required)")
 	}
 }
 
-func promptYesNo(r *bufio.Reader, w io.Writer, label string, def bool) bool {
+func promptYesNo(r *bufio.Reader, w io.Writer, label string, def bool) (bool, error) {
 	hint := "y/N"
 	if def {
 		hint = "Y/n"
 	}
 	fmt.Fprintf(w, "%s [%s]: ", label, hint)
-	s := strings.ToLower(readLine(r))
-	if s == "" {
-		return def
+	s, err := readLine(r)
+	if err != nil {
+		return false, err
 	}
-	return s == "y" || s == "yes"
+	s = strings.ToLower(s)
+	if s == "" {
+		return def, nil
+	}
+	return s == "y" || s == "yes", nil
 }
 
-func readLine(r *bufio.Reader) string {
+func readLine(r *bufio.Reader) (string, error) {
 	line, err := r.ReadString('\n')
-	if err != nil && line == "" {
-		return ""
+	if err != nil {
+		if line == "" {
+			// Nothing more to read: an interactive answer is impossible.
+			return "", errEOF
+		}
+		// Final line without a trailing newline still counts as an answer.
 	}
-	return strings.TrimSpace(line)
+	return strings.TrimSpace(line), nil
 }
 
 func defaultName(i int, seen map[string]bool) string {

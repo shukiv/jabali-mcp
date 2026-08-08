@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -104,6 +105,36 @@ func TestSearchDocsFetchSinglePageAndOriginGuard(t *testing.T) {
 	res = callSearchDocs(t, cs, map[string]any{"query": "x", "doc": "http://127.0.0.1:1/pwned.md"})
 	if !res.IsError || !strings.Contains(firstText(res), "outside the docs origin") {
 		t.Errorf("off-origin doc must be refused, got IsError=%v %q", res.IsError, firstText(res))
+	}
+}
+
+func TestSearchDocsRejectsOffOriginRedirect(t *testing.T) {
+	// A same-origin doc URL that 302s to another server must not be followed.
+	var targetHit atomic.Bool
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		targetHit.Store(true)
+	}))
+	defer target.Close()
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/docs/redirect.md", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target.URL+"/pwned.md", http.StatusFound)
+	})
+	site := httptest.NewServer(mux)
+	defer site.Close()
+	t.Setenv("JABALI_DOCS_URL", site.URL)
+
+	fp := &fakePanel{}
+	ts := httptest.NewServer(fp.handler())
+	defer ts.Close()
+	cs := connect(t, newOpts(t, ts.URL, false))
+
+	res := callSearchDocs(t, cs, map[string]any{"query": "x", "doc": "/docs/redirect.md"})
+	if !res.IsError || !strings.Contains(firstText(res), "refusing off-origin redirect") {
+		t.Errorf("off-origin redirect must be refused, got IsError=%v %q", res.IsError, firstText(res))
+	}
+	if targetHit.Load() {
+		t.Error("the redirect target must never be fetched")
 	}
 }
 

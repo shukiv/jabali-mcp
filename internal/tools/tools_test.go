@@ -236,6 +236,41 @@ func TestGlobalDryRunForcesPreview(t *testing.T) {
 	}
 }
 
+func TestDryRunRedactsSecrets(t *testing.T) {
+	fp := &fakePanel{}
+	ts := httptest.NewServer(fp.handler())
+	defer ts.Close()
+
+	cs := connect(t, newOpts(t, ts.URL, true))
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// A dry-run preview of a password-bearing tool must redact the password.
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: "create_mailbox",
+		Arguments: map[string]any{
+			"domain_id": "01D", "local_part": "alice",
+			"password": "sup3rsecretpw", "quota_mb": 1024, "dry_run": true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("call create_mailbox dry-run: %v", err)
+	}
+	text := firstText(res)
+	if !strings.Contains(text, "DRY RUN") {
+		t.Fatalf("expected a dry-run preview, got %q", text)
+	}
+	if strings.Contains(text, "sup3rsecretpw") {
+		t.Errorf("preview must not contain the plaintext password, got %q", text)
+	}
+	if !strings.Contains(text, `"password":"***"`) {
+		t.Errorf("expected the password redacted to \"***\", got %q", text)
+	}
+	if n := len(fp.methods()); n != 0 {
+		t.Fatalf("dry-run must not hit the panel, got %d calls", n)
+	}
+}
+
 func TestInputValidationRejectsBeforePanel(t *testing.T) {
 	fp := &fakePanel{}
 	ts := httptest.NewServer(fp.handler())

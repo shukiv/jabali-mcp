@@ -160,7 +160,7 @@ func docFields(m toolModel) []field {
 
 func docType(f field) string {
 	switch f.GoType {
-	case "int":
+	case "int", "*int":
 		return "integer"
 	case "float64":
 		return "number"

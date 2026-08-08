@@ -86,6 +86,11 @@ func run() error {
 		return err
 	}
 
+	// Loud but non-blocking: plain http to a remote host leaks the token.
+	for _, n := range opts.Registry.PlainHTTPPanels() {
+		fmt.Fprintf(os.Stderr, "WARNING: panel %q uses plain http:// — the API token is sent unencrypted; use https:// or restrict to loopback\n", n)
+	}
+
 	srv := mcp.NewServer(&mcp.Implementation{
 		Name:    "jabali-mcp",
 		Title:   "Jabali Panel",

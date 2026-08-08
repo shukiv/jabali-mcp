@@ -26,6 +26,10 @@ type check struct {
 }
 
 func main() {
+	if len(os.Args) < 2 {
+		fmt.Fprintln(os.Stderr, "usage: smoke <path-to-jabali-mcp-binary>")
+		os.Exit(2)
+	}
 	bin := os.Args[1]
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
@@ -54,7 +58,7 @@ func main() {
 	if res, err := sess.CallTool(ctx, &mcp.CallToolParams{Name: "list_domains", Arguments: map[string]any{}}); err == nil && !res.IsError {
 		txt := text(res)
 		// crude ULID sniff from the JSON — first "id":"01..."
-		if i := strings.Index(txt, `"id":"01`); i >= 0 {
+		if i := strings.Index(txt, `"id":"01`); i >= 0 && i+6+26 <= len(txt) {
 			domainID = txt[i+6 : i+6+26]
 		}
 	}

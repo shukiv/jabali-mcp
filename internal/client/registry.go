@@ -2,9 +2,12 @@ package client
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 )
 
@@ -31,7 +34,15 @@ func SavePanels(path string, cfgs []Config) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, append(b, '\n'), 0o600)
+	if err := os.WriteFile(path, append(b, '\n'), 0o600); err != nil {
+		return err
+	}
+	// WriteFile's perm only applies when the file is created; an existing file
+	// keeps its mode. Force 0600 so an overwrite can't leave tokens readable.
+	if err := os.Chmod(path, 0o600); err != nil {
+		return fmt.Errorf("chmod %s: %w", path, err)
+	}
+	return nil
 }
 
 // Registry holds one or more panel clients and a default selection.
@@ -75,6 +86,19 @@ func (r *Registry) Names() []string {
 // Multi reports whether more than one panel is configured (fleet mode).
 func (r *Registry) Multi() bool { return len(r.clients) > 1 }
 
+// PlainHTTPPanels lists the names of panels whose base URL is plain http:// to
+// a non-loopback host — their API token would be sent unencrypted.
+func (r *Registry) PlainHTTPPanels() []string {
+	var out []string
+	for n, c := range r.clients {
+		if c.IsPlainHTTP() {
+			out = append(out, n)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
 // Default is the default panel name.
 func (r *Registry) Default() string { return r.def }
 
@@ -112,13 +136,20 @@ func LoadOptions() (Options, error) {
 	// This lets a configured client be just `command: jabali-mcp`, no env.
 	if os.Getenv("JABALI_PANEL_URL") == "" {
 		if p := DefaultConfigPath(); p != "" {
-			if _, err := os.Stat(p); err == nil {
+			_, err := os.Stat(p)
+			switch {
+			case err == nil:
 				reg, err := loadPanelsFile(p)
 				if err != nil {
 					return opts, err
 				}
 				opts.Registry = reg
 				return opts, nil
+			case errors.Is(err, fs.ErrNotExist):
+				// No default config written yet — fall through to the env vars.
+			default:
+				// EACCES and friends must not masquerade as "no panel configured".
+				return opts, fmt.Errorf("stat default config %s: %w", p, err)
 			}
 		}
 	}
@@ -185,6 +216,10 @@ func envBool(key string) bool {
 	if v == "" {
 		return false
 	}
-	b, _ := strconv.ParseBool(v)
+	b, err := strconv.ParseBool(v)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "jabali-mcp: warning: %s=%q is not a boolean value; treating it as false\n", key, v)
+		return false
+	}
 	return b
 }

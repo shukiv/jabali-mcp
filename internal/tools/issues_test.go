@@ -2,6 +2,7 @@ package tools_test
 
 import (
 	"context"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -88,6 +89,29 @@ func TestReportIssueBlocksSecrets(t *testing.T) {
 	})
 	if !res.IsError || !strings.Contains(firstText(res), "secret") {
 		t.Errorf("secret-bearing body must be refused, got IsError=%v %q", res.IsError, firstText(res))
+	}
+}
+
+func TestReportIssueBlocksSecretInDiagnostics(t *testing.T) {
+	// The caller's own title/body are clean, but the attached diagnostics blob
+	// carries a token — the composed body must be refused.
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if strings.HasPrefix(r.URL.Path, "/logs/tail") {
+			_, _ = w.Write([]byte(`{"lines":["upstream sent token jat_abcdefghijklmnopqrstuvwx in a header"]}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"data":[],"total":0,"page":1,"page_size":50}`))
+	}))
+	defer ts.Close()
+
+	cs := connect(t, newOpts(t, ts.URL, true))
+	res := callReportIssue(t, cs, map[string]any{
+		"repo": "jabali-panel", "kind": "bug", "title": "SSL stuck pending",
+		"body": "repro", "diagnose_domain_id": "01D", "confirm": true,
+	})
+	if !res.IsError || !strings.Contains(firstText(res), "secret") {
+		t.Errorf("secret-bearing diagnostics must be refused, got IsError=%v %q", res.IsError, firstText(res))
 	}
 }
 

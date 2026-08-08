@@ -35,6 +35,9 @@ func registerRead(s *mcp.Server, reg *client.Registry) {
 		}
 		mcp.AddTool(s, &mcp.Tool{Name: "get_domain", Description: "get_domain", Annotations: roAnno()},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in GetDomainIn) (*mcp.CallToolResult, any, error) {
+				if in.DomainId == "." || in.DomainId == ".." {
+					return errResult("invalid domain_id: dot segments are not allowed"), nil, nil
+				}
 				path := "/domains/" + url.PathEscape(in.DomainId)
 				return runRead(ctx, reg, in, reqSpec{http.MethodGet, path, nil})
 			})
@@ -46,6 +49,9 @@ func registerRead(s *mcp.Server, reg *client.Registry) {
 		}
 		mcp.AddTool(s, &mcp.Tool{Name: "list_dns_records", Description: "List records in a zone", Annotations: roAnno()},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in ListDnsRecordsIn) (*mcp.CallToolResult, any, error) {
+				if in.DomainId == "." || in.DomainId == ".." {
+					return errResult("invalid domain_id: dot segments are not allowed"), nil, nil
+				}
 				path := "/domains/" + url.PathEscape(in.DomainId) + "/dns/records"
 				return runRead(ctx, reg, in, reqSpec{http.MethodGet, path, nil})
 			})
@@ -57,6 +63,9 @@ func registerRead(s *mcp.Server, reg *client.Registry) {
 		}
 		mcp.AddTool(s, &mcp.Tool{Name: "list_mailboxes", Description: "list_mailboxes", Annotations: roAnno()},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in ListMailboxesIn) (*mcp.CallToolResult, any, error) {
+				if in.DomainId == "." || in.DomainId == ".." {
+					return errResult("invalid domain_id: dot segments are not allowed"), nil, nil
+				}
 				path := "/domains/" + url.PathEscape(in.DomainId) + "/mailboxes"
 				return runRead(ctx, reg, in, reqSpec{http.MethodGet, path, nil})
 			})
@@ -68,6 +77,9 @@ func registerRead(s *mcp.Server, reg *client.Registry) {
 		}
 		mcp.AddTool(s, &mcp.Tool{Name: "list_forwarders", Description: "list_forwarders", Annotations: roAnno()},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in ListForwardersIn) (*mcp.CallToolResult, any, error) {
+				if in.DomainId == "." || in.DomainId == ".." {
+					return errResult("invalid domain_id: dot segments are not allowed"), nil, nil
+				}
 				path := "/domains/" + url.PathEscape(in.DomainId) + "/forwarders"
 				return runRead(ctx, reg, in, reqSpec{http.MethodGet, path, nil})
 			})
@@ -131,8 +143,8 @@ func registerRead(s *mcp.Server, reg *client.Registry) {
 	{
 		type ListMailLogsIn struct {
 			panelArg
-			Limit     int    `json:"limit,omitempty" jsonschema:"max entries"`
-			Offset    int    `json:"offset,omitempty" jsonschema:"offset"`
+			Limit     *int   `json:"limit,omitempty" jsonschema:"max entries"`
+			Offset    *int   `json:"offset,omitempty" jsonschema:"offset"`
 			Sender    string `json:"sender,omitempty" jsonschema:"filter by sender address"`
 			Recipient string `json:"recipient,omitempty" jsonschema:"filter by recipient address"`
 		}
@@ -140,11 +152,11 @@ func registerRead(s *mcp.Server, reg *client.Registry) {
 			func(ctx context.Context, _ *mcp.CallToolRequest, in ListMailLogsIn) (*mcp.CallToolResult, any, error) {
 				path := "/mail/logs"
 				q := url.Values{}
-				if in.Limit != 0 {
-					q.Set("limit", strconv.Itoa(in.Limit))
+				if in.Limit != nil {
+					q.Set("limit", strconv.Itoa(*in.Limit))
 				}
-				if in.Offset != 0 {
-					q.Set("offset", strconv.Itoa(in.Offset))
+				if in.Offset != nil {
+					q.Set("offset", strconv.Itoa(*in.Offset))
 				}
 				if in.Sender != "" {
 					q.Set("sender", in.Sender)
@@ -163,7 +175,7 @@ func registerRead(s *mcp.Server, reg *client.Registry) {
 			panelArg
 			DomainId string `json:"domain_id" jsonschema:"the domain's ULID"`
 			LogType  string `json:"log_type" jsonschema:"one of: access, error"`
-			Lines    int    `json:"lines,omitempty" jsonschema:"how many trailing lines"`
+			Lines    *int   `json:"lines,omitempty" jsonschema:"how many trailing lines"`
 		}
 		schema := inferSchema[TailWebLogIn]()
 		schema.Properties["log_type"].Enum = enumVals("access", "error")
@@ -174,11 +186,11 @@ func registerRead(s *mcp.Server, reg *client.Registry) {
 				if r := vEnum("log_type", in.LogType, []string{"access", "error"}); r != nil {
 					return r, nil, nil
 				}
-				if in.Lines != 0 {
-					if r := vMin("lines", in.Lines, 1); r != nil {
+				if in.Lines != nil {
+					if r := vMin("lines", *in.Lines, 1); r != nil {
 						return r, nil, nil
 					}
-					if r := vMax("lines", in.Lines, 2000); r != nil {
+					if r := vMax("lines", *in.Lines, 2000); r != nil {
 						return r, nil, nil
 					}
 				}
@@ -186,8 +198,8 @@ func registerRead(s *mcp.Server, reg *client.Registry) {
 				q := url.Values{}
 				q.Set("domain_id", in.DomainId)
 				q.Set("log_type", in.LogType)
-				if in.Lines != 0 {
-					q.Set("lines", strconv.Itoa(in.Lines))
+				if in.Lines != nil {
+					q.Set("lines", strconv.Itoa(*in.Lines))
 				}
 				if enc := q.Encode(); enc != "" {
 					path += "?" + enc
@@ -202,6 +214,9 @@ func registerRead(s *mcp.Server, reg *client.Registry) {
 		}
 		mcp.AddTool(s, &mcp.Tool{Name: "get_ssl_status", Description: "SSL certificate status for a domain", Annotations: roAnno()},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in GetSslStatusIn) (*mcp.CallToolResult, any, error) {
+				if in.DomainId == "." || in.DomainId == ".." {
+					return errResult("invalid domain_id: dot segments are not allowed"), nil, nil
+				}
 				path := "/domains/" + url.PathEscape(in.DomainId) + "/ssl"
 				return runRead(ctx, reg, in, reqSpec{http.MethodGet, path, nil})
 			})
@@ -213,6 +228,9 @@ func registerRead(s *mcp.Server, reg *client.Registry) {
 		}
 		mcp.AddTool(s, &mcp.Tool{Name: "get_domain_whois", Description: "WHOIS lookup for a domain (registrar, expiry, name servers)", Annotations: roAnno()},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in GetDomainWhoisIn) (*mcp.CallToolResult, any, error) {
+				if in.DomainId == "." || in.DomainId == ".." {
+					return errResult("invalid domain_id: dot segments are not allowed"), nil, nil
+				}
 				path := "/domains/" + url.PathEscape(in.DomainId) + "/whois"
 				return runRead(ctx, reg, in, reqSpec{http.MethodGet, path, nil})
 			})
@@ -226,6 +244,9 @@ func registerRead(s *mcp.Server, reg *client.Registry) {
 		}
 		mcp.AddTool(s, &mcp.Tool{Name: "get_domain_bandwidth", Description: "Bandwidth usage for a domain (bytes + requests, daily series)", Annotations: roAnno()},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in GetDomainBandwidthIn) (*mcp.CallToolResult, any, error) {
+				if in.DomainId == "." || in.DomainId == ".." {
+					return errResult("invalid domain_id: dot segments are not allowed"), nil, nil
+				}
 				path := "/domains/" + url.PathEscape(in.DomainId) + "/bandwidth"
 				q := url.Values{}
 				if in.From != "" {
@@ -291,6 +312,9 @@ func registerRead(s *mcp.Server, reg *client.Registry) {
 		}
 		mcp.AddTool(s, &mcp.Tool{Name: "get_cron_job", Description: "Get a cron job", Annotations: roAnno()},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in GetCronJobIn) (*mcp.CallToolResult, any, error) {
+				if in.CronId == "." || in.CronId == ".." {
+					return errResult("invalid cron_id: dot segments are not allowed"), nil, nil
+				}
 				path := "/cron/" + url.PathEscape(in.CronId)
 				return runRead(ctx, reg, in, reqSpec{http.MethodGet, path, nil})
 			})
@@ -299,25 +323,28 @@ func registerRead(s *mcp.Server, reg *client.Registry) {
 		type GetCronLogIn struct {
 			panelArg
 			CronId string `json:"cron_id" jsonschema:"the cron's ULID"`
-			Lines  int    `json:"lines,omitempty" jsonschema:"trailing lines to return (default 50)"`
+			Lines  *int   `json:"lines,omitempty" jsonschema:"trailing lines to return (default 50)"`
 		}
 		schema := inferSchema[GetCronLogIn]()
 		schema.Properties["lines"].Minimum = f64(1)
 		schema.Properties["lines"].Maximum = f64(500)
 		mcp.AddTool(s, &mcp.Tool{Name: "get_cron_log", Description: "Read a cron job's recent log output", Annotations: roAnno(), InputSchema: schema},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in GetCronLogIn) (*mcp.CallToolResult, any, error) {
-				if in.Lines != 0 {
-					if r := vMin("lines", in.Lines, 1); r != nil {
+				if in.Lines != nil {
+					if r := vMin("lines", *in.Lines, 1); r != nil {
 						return r, nil, nil
 					}
-					if r := vMax("lines", in.Lines, 500); r != nil {
+					if r := vMax("lines", *in.Lines, 500); r != nil {
 						return r, nil, nil
 					}
 				}
+				if in.CronId == "." || in.CronId == ".." {
+					return errResult("invalid cron_id: dot segments are not allowed"), nil, nil
+				}
 				path := "/cron/" + url.PathEscape(in.CronId) + "/log"
 				q := url.Values{}
-				if in.Lines != 0 {
-					q.Set("lines", strconv.Itoa(in.Lines))
+				if in.Lines != nil {
+					q.Set("lines", strconv.Itoa(*in.Lines))
 				}
 				if enc := q.Encode(); enc != "" {
 					path += "?" + enc
@@ -342,6 +369,9 @@ func registerRead(s *mcp.Server, reg *client.Registry) {
 		}
 		mcp.AddTool(s, &mcp.Tool{Name: "get_application", Description: "Get an installed app (status, version, URL)", Annotations: roAnno()},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in GetApplicationIn) (*mcp.CallToolResult, any, error) {
+				if in.ApplicationId == "." || in.ApplicationId == ".." {
+					return errResult("invalid application_id: dot segments are not allowed"), nil, nil
+				}
 				path := "/applications/" + url.PathEscape(in.ApplicationId)
 				return runRead(ctx, reg, in, reqSpec{http.MethodGet, path, nil})
 			})
@@ -349,19 +379,22 @@ func registerRead(s *mcp.Server, reg *client.Registry) {
 	{
 		type GetDatabaseIn struct {
 			panelArg
-			DatabasId string `json:"databas_id" jsonschema:"the databas's ULID"`
+			DatabaseId string `json:"database_id" jsonschema:"the database's ULID"`
 		}
 		mcp.AddTool(s, &mcp.Tool{Name: "get_database", Description: "Get a database (engine, size, grants)", Annotations: roAnno()},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in GetDatabaseIn) (*mcp.CallToolResult, any, error) {
-				path := "/databases/" + url.PathEscape(in.DatabasId)
+				if in.DatabaseId == "." || in.DatabaseId == ".." {
+					return errResult("invalid database_id: dot segments are not allowed"), nil, nil
+				}
+				path := "/databases/" + url.PathEscape(in.DatabaseId)
 				return runRead(ctx, reg, in, reqSpec{http.MethodGet, path, nil})
 			})
 	}
 	{
 		type ListDatabaseUsersIn struct {
 			panelArg
-			Page     int `json:"page,omitempty" jsonschema:"page number (1-based)"`
-			PageSize int `json:"page_size,omitempty" jsonschema:"results per page (default 20)"`
+			Page     *int `json:"page,omitempty" jsonschema:"page number (1-based)"`
+			PageSize *int `json:"page_size,omitempty" jsonschema:"results per page (default 20)"`
 		}
 		schema := inferSchema[ListDatabaseUsersIn]()
 		schema.Properties["page"].Minimum = f64(1)
@@ -369,26 +402,26 @@ func registerRead(s *mcp.Server, reg *client.Registry) {
 		schema.Properties["page_size"].Maximum = f64(200)
 		mcp.AddTool(s, &mcp.Tool{Name: "list_database_users", Description: "List your database users", Annotations: roAnno(), InputSchema: schema},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in ListDatabaseUsersIn) (*mcp.CallToolResult, any, error) {
-				if in.Page != 0 {
-					if r := vMin("page", in.Page, 1); r != nil {
+				if in.Page != nil {
+					if r := vMin("page", *in.Page, 1); r != nil {
 						return r, nil, nil
 					}
 				}
-				if in.PageSize != 0 {
-					if r := vMin("page_size", in.PageSize, 1); r != nil {
+				if in.PageSize != nil {
+					if r := vMin("page_size", *in.PageSize, 1); r != nil {
 						return r, nil, nil
 					}
-					if r := vMax("page_size", in.PageSize, 200); r != nil {
+					if r := vMax("page_size", *in.PageSize, 200); r != nil {
 						return r, nil, nil
 					}
 				}
 				path := "/database-users"
 				q := url.Values{}
-				if in.Page != 0 {
-					q.Set("page", strconv.Itoa(in.Page))
+				if in.Page != nil {
+					q.Set("page", strconv.Itoa(*in.Page))
 				}
-				if in.PageSize != 0 {
-					q.Set("page_size", strconv.Itoa(in.PageSize))
+				if in.PageSize != nil {
+					q.Set("page_size", strconv.Itoa(*in.PageSize))
 				}
 				if enc := q.Encode(); enc != "" {
 					path += "?" + enc
@@ -403,6 +436,9 @@ func registerRead(s *mcp.Server, reg *client.Registry) {
 		}
 		mcp.AddTool(s, &mcp.Tool{Name: "get_mailbox", Description: "Get a mailbox (address, quota, flags)", Annotations: roAnno()},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in GetMailboxIn) (*mcp.CallToolResult, any, error) {
+				if in.MailboxId == "." || in.MailboxId == ".." {
+					return errResult("invalid mailbox_id: dot segments are not allowed"), nil, nil
+				}
 				path := "/mailboxes/" + url.PathEscape(in.MailboxId)
 				return runRead(ctx, reg, in, reqSpec{http.MethodGet, path, nil})
 			})
@@ -414,6 +450,9 @@ func registerRead(s *mcp.Server, reg *client.Registry) {
 		}
 		mcp.AddTool(s, &mcp.Tool{Name: "get_autoresponder", Description: "Get a mailbox's autoresponder (vacation reply)", Annotations: roAnno()},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in GetAutoresponderIn) (*mcp.CallToolResult, any, error) {
+				if in.MailboxId == "." || in.MailboxId == ".." {
+					return errResult("invalid mailbox_id: dot segments are not allowed"), nil, nil
+				}
 				path := "/mailboxes/" + url.PathEscape(in.MailboxId) + "/autoresponder"
 				return runRead(ctx, reg, in, reqSpec{http.MethodGet, path, nil})
 			})
@@ -425,6 +464,9 @@ func registerRead(s *mcp.Server, reg *client.Registry) {
 		}
 		mcp.AddTool(s, &mcp.Tool{Name: "get_backup_manifest", Description: "List a snapshot's contents (manifest; only for succeeded backups)", Annotations: roAnno()},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in GetBackupManifestIn) (*mcp.CallToolResult, any, error) {
+				if in.BackupId == "." || in.BackupId == ".." {
+					return errResult("invalid backup_id: dot segments are not allowed"), nil, nil
+				}
 				path := "/me/backups/" + url.PathEscape(in.BackupId) + "/manifest"
 				return runRead(ctx, reg, in, reqSpec{http.MethodGet, path, nil})
 			})
@@ -446,6 +488,9 @@ func registerRead(s *mcp.Server, reg *client.Registry) {
 		}
 		mcp.AddTool(s, &mcp.Tool{Name: "get_php_settings", Description: "Effective PHP settings for a domain (version, limits)", Annotations: roAnno()},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in GetPhpSettingsIn) (*mcp.CallToolResult, any, error) {
+				if in.DomainId == "." || in.DomainId == ".." {
+					return errResult("invalid domain_id: dot segments are not allowed"), nil, nil
+				}
 				path := "/domains/" + url.PathEscape(in.DomainId) + "/php-settings"
 				return runRead(ctx, reg, in, reqSpec{http.MethodGet, path, nil})
 			})
@@ -536,6 +581,9 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 						return r, nil, nil
 					}
 				}
+				if in.DomainId == "." || in.DomainId == ".." {
+					return errResult("invalid domain_id: dot segments are not allowed"), nil, nil
+				}
 				path := "/domains/" + url.PathEscape(in.DomainId)
 				body := map[string]any{}
 				if in.IsEnabled != nil {
@@ -566,8 +614,8 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 			DomainId string `json:"domain_id" jsonschema:"the domain's ULID"`
 			Content  string `json:"content" jsonschema:"e.g. 203.0.113.5"`
 			Name     string `json:"name" jsonschema:"e.g. vpn"`
-			Priority int    `json:"priority,omitempty" jsonschema:"priority"`
-			Ttl      int    `json:"ttl,omitempty" jsonschema:"Omit to use server-wide default (Server Settings → DNS)."`
+			Priority *int   `json:"priority,omitempty" jsonschema:"priority"`
+			Ttl      *int   `json:"ttl,omitempty" jsonschema:"Omit to use server-wide default (Server Settings → DNS)."`
 			Type     string `json:"type" jsonschema:"one of: A, AAAA, CNAME, MX, TXT, SRV, CAA, NS"`
 		}
 		schema := inferSchema[CreateDnsRecordIn]()
@@ -577,15 +625,18 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 				if r := vEnum("type", in.Type, []string{"A", "AAAA", "CNAME", "MX", "TXT", "SRV", "CAA", "NS"}); r != nil {
 					return r, nil, nil
 				}
+				if in.DomainId == "." || in.DomainId == ".." {
+					return errResult("invalid domain_id: dot segments are not allowed"), nil, nil
+				}
 				path := "/domains/" + url.PathEscape(in.DomainId) + "/dns/records"
 				body := map[string]any{}
 				body["content"] = in.Content
 				body["name"] = in.Name
-				if in.Priority != 0 {
-					body["priority"] = in.Priority
+				if in.Priority != nil {
+					body["priority"] = *in.Priority
 				}
-				if in.Ttl != 0 {
-					body["ttl"] = in.Ttl
+				if in.Ttl != nil {
+					body["ttl"] = *in.Ttl
 				}
 				body["type"] = in.Type
 				return runWrite(ctx, reg, in, false, "", reqSpec{http.MethodPost, path, body})
@@ -598,11 +649,14 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 			RecordId  string `json:"record_id" jsonschema:"the record's ULID"`
 			Content   string `json:"content,omitempty" jsonschema:"e.g. 203.0.113.99"`
 			IsEnabled *bool  `json:"is_enabled,omitempty" jsonschema:"is enabled"`
-			Priority  int    `json:"priority,omitempty" jsonschema:"priority"`
-			Ttl       int    `json:"ttl,omitempty" jsonschema:"ttl"`
+			Priority  *int   `json:"priority,omitempty" jsonschema:"priority"`
+			Ttl       *int   `json:"ttl,omitempty" jsonschema:"ttl"`
 		}
 		mcp.AddTool(s, &mcp.Tool{Name: "update_dns_record", Description: "Update a record", Annotations: additiveAnno()},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in UpdateDnsRecordIn) (*mcp.CallToolResult, any, error) {
+				if in.RecordId == "." || in.RecordId == ".." {
+					return errResult("invalid record_id: dot segments are not allowed"), nil, nil
+				}
 				path := "/dns/records/" + url.PathEscape(in.RecordId)
 				body := map[string]any{}
 				if in.Content != "" {
@@ -611,11 +665,11 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 				if in.IsEnabled != nil {
 					body["is_enabled"] = *in.IsEnabled
 				}
-				if in.Priority != 0 {
-					body["priority"] = in.Priority
+				if in.Priority != nil {
+					body["priority"] = *in.Priority
 				}
-				if in.Ttl != 0 {
-					body["ttl"] = in.Ttl
+				if in.Ttl != nil {
+					body["ttl"] = *in.Ttl
 				}
 				return runWrite(ctx, reg, in, false, "", reqSpec{http.MethodPatch, path, body})
 			})
@@ -636,6 +690,9 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 				if r := vMinLen("password", in.Password, 12); r != nil {
 					return r, nil, nil
 				}
+				if in.DomainId == "." || in.DomainId == ".." {
+					return errResult("invalid domain_id: dot segments are not allowed"), nil, nil
+				}
 				path := "/domains/" + url.PathEscape(in.DomainId) + "/mailboxes"
 				body := map[string]any{}
 				body["local_part"] = in.LocalPart
@@ -654,6 +711,9 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 		}
 		mcp.AddTool(s, &mcp.Tool{Name: "create_forwarder", Description: "create_forwarder", Annotations: additiveAnno()},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in CreateForwarderIn) (*mcp.CallToolResult, any, error) {
+				if in.DomainId == "." || in.DomainId == ".." {
+					return errResult("invalid domain_id: dot segments are not allowed"), nil, nil
+				}
 				path := "/domains/" + url.PathEscape(in.DomainId) + "/forwarders"
 				body := map[string]any{}
 				body["dest"] = in.Dest
@@ -726,6 +786,9 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 		}
 		mcp.AddTool(s, &mcp.Tool{Name: "enable_ssl", Description: "Enable SSL — issue a Let's Encrypt certificate for the domain", Annotations: additiveAnno()},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in EnableSslIn) (*mcp.CallToolResult, any, error) {
+				if in.DomainId == "." || in.DomainId == ".." {
+					return errResult("invalid domain_id: dot segments are not allowed"), nil, nil
+				}
 				path := "/domains/" + url.PathEscape(in.DomainId) + "/ssl"
 				return runWrite(ctx, reg, in, false, "", reqSpec{http.MethodPost, path, nil})
 			})
@@ -764,6 +827,9 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 		}
 		mcp.AddTool(s, &mcp.Tool{Name: "update_cron_job", Description: "Update a cron job (partial — absent fields are left untouched)", Annotations: additiveAnno()},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in UpdateCronJobIn) (*mcp.CallToolResult, any, error) {
+				if in.CronId == "." || in.CronId == ".." {
+					return errResult("invalid cron_id: dot segments are not allowed"), nil, nil
+				}
 				path := "/cron/" + url.PathEscape(in.CronId)
 				body := map[string]any{}
 				if in.Command != "" {
@@ -789,6 +855,9 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 		}
 		mcp.AddTool(s, &mcp.Tool{Name: "run_cron_job", Description: "Run a cron job immediately (409 if the job is disabled)", Annotations: additiveAnno()},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in RunCronJobIn) (*mcp.CallToolResult, any, error) {
+				if in.CronId == "." || in.CronId == ".." {
+					return errResult("invalid cron_id: dot segments are not allowed"), nil, nil
+				}
 				path := "/cron/" + url.PathEscape(in.CronId) + "/run-now"
 				return runWrite(ctx, reg, in, false, "", reqSpec{http.MethodPost, path, nil})
 			})
@@ -826,6 +895,9 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 				if r := vEnum("grant_level", in.GrantLevel, []string{"rw", "ro"}); r != nil {
 					return r, nil, nil
 				}
+				if in.DatabaseUserId == "." || in.DatabaseUserId == ".." {
+					return errResult("invalid database_user_id: dot segments are not allowed"), nil, nil
+				}
 				path := "/database-users/" + url.PathEscape(in.DatabaseUserId) + "/grants"
 				body := map[string]any{}
 				body["database_id"] = in.DatabaseId
@@ -840,17 +912,20 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 			MailboxId   string `json:"mailbox_id" jsonschema:"the mailbox's ULID"`
 			DisplayName string `json:"display_name,omitempty" jsonschema:"display name shown in webmail"`
 			IsDisabled  *bool  `json:"is_disabled,omitempty" jsonschema:"disable login + delivery for this mailbox"`
-			QuotaBytes  int    `json:"quota_bytes,omitempty" jsonschema:"mailbox quota in bytes (min 16 MiB)"`
+			QuotaBytes  *int   `json:"quota_bytes,omitempty" jsonschema:"mailbox quota in bytes (min 16 MiB)"`
 			SendOnly    *bool  `json:"send_only,omitempty" jsonschema:"mailbox may send but not receive"`
 		}
 		schema := inferSchema[UpdateMailboxIn]()
 		schema.Properties["quota_bytes"].Minimum = f64(16777216)
 		mcp.AddTool(s, &mcp.Tool{Name: "update_mailbox", Description: "Update a mailbox (partial — absent fields are left untouched)", Annotations: additiveAnno(), InputSchema: schema},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in UpdateMailboxIn) (*mcp.CallToolResult, any, error) {
-				if in.QuotaBytes != 0 {
-					if r := vMin("quota_bytes", in.QuotaBytes, 16777216); r != nil {
+				if in.QuotaBytes != nil {
+					if r := vMin("quota_bytes", *in.QuotaBytes, 16777216); r != nil {
 						return r, nil, nil
 					}
+				}
+				if in.MailboxId == "." || in.MailboxId == ".." {
+					return errResult("invalid mailbox_id: dot segments are not allowed"), nil, nil
 				}
 				path := "/mailboxes/" + url.PathEscape(in.MailboxId)
 				body := map[string]any{}
@@ -860,8 +935,8 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 				if in.IsDisabled != nil {
 					body["is_disabled"] = *in.IsDisabled
 				}
-				if in.QuotaBytes != 0 {
-					body["quota_bytes"] = in.QuotaBytes
+				if in.QuotaBytes != nil {
+					body["quota_bytes"] = *in.QuotaBytes
 				}
 				if in.SendOnly != nil {
 					body["send_only"] = *in.SendOnly
@@ -883,6 +958,9 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 		}
 		mcp.AddTool(s, &mcp.Tool{Name: "set_autoresponder", Description: "Set a mailbox's autoresponder (vacation reply)", Annotations: additiveAnno()},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in SetAutoresponderIn) (*mcp.CallToolResult, any, error) {
+				if in.MailboxId == "." || in.MailboxId == ".." {
+					return errResult("invalid mailbox_id: dot segments are not allowed"), nil, nil
+				}
 				path := "/mailboxes/" + url.PathEscape(in.MailboxId) + "/autoresponder"
 				body := map[string]any{}
 				body["enabled"] = in.Enabled
@@ -925,9 +1003,9 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 			panelArg
 			dryRunArg
 			DomainId             string `json:"domain_id" jsonschema:"the domain's ULID"`
-			PhpMaxExecutionTime  int    `json:"php_max_execution_time,omitempty" jsonschema:"script time limit, seconds"`
-			PhpMaxInputTime      int    `json:"php_max_input_time,omitempty" jsonschema:"input parsing time limit, seconds"`
-			PhpMaxInputVars      int    `json:"php_max_input_vars,omitempty" jsonschema:"max request input variables"`
+			PhpMaxExecutionTime  *int   `json:"php_max_execution_time,omitempty" jsonschema:"script time limit, seconds"`
+			PhpMaxInputTime      *int   `json:"php_max_input_time,omitempty" jsonschema:"input parsing time limit, seconds"`
+			PhpMaxInputVars      *int   `json:"php_max_input_vars,omitempty" jsonschema:"max request input variables"`
 			PhpMemoryLimit       string `json:"php_memory_limit,omitempty" jsonschema:"digits + optional K/M/G suffix, e.g. 256M"`
 			PhpPostMaxSize       string `json:"php_post_max_size,omitempty" jsonschema:"digits + optional K/M/G suffix, e.g. 64M"`
 			PhpUploadMaxFilesize string `json:"php_upload_max_filesize,omitempty" jsonschema:"digits + optional K/M/G suffix, e.g. 64M"`
@@ -942,40 +1020,43 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 		schema.Properties["php_max_input_vars"].Maximum = f64(86400)
 		mcp.AddTool(s, &mcp.Tool{Name: "update_php_settings", Description: "Update a domain's PHP settings (partial — absent fields are left untouched)", Annotations: additiveAnno(), InputSchema: schema},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in UpdatePhpSettingsIn) (*mcp.CallToolResult, any, error) {
-				if in.PhpMaxExecutionTime != 0 {
-					if r := vMin("php_max_execution_time", in.PhpMaxExecutionTime, 1); r != nil {
+				if in.PhpMaxExecutionTime != nil {
+					if r := vMin("php_max_execution_time", *in.PhpMaxExecutionTime, 1); r != nil {
 						return r, nil, nil
 					}
-					if r := vMax("php_max_execution_time", in.PhpMaxExecutionTime, 86400); r != nil {
-						return r, nil, nil
-					}
-				}
-				if in.PhpMaxInputTime != 0 {
-					if r := vMin("php_max_input_time", in.PhpMaxInputTime, 1); r != nil {
-						return r, nil, nil
-					}
-					if r := vMax("php_max_input_time", in.PhpMaxInputTime, 86400); r != nil {
+					if r := vMax("php_max_execution_time", *in.PhpMaxExecutionTime, 86400); r != nil {
 						return r, nil, nil
 					}
 				}
-				if in.PhpMaxInputVars != 0 {
-					if r := vMin("php_max_input_vars", in.PhpMaxInputVars, 1); r != nil {
+				if in.PhpMaxInputTime != nil {
+					if r := vMin("php_max_input_time", *in.PhpMaxInputTime, 1); r != nil {
 						return r, nil, nil
 					}
-					if r := vMax("php_max_input_vars", in.PhpMaxInputVars, 86400); r != nil {
+					if r := vMax("php_max_input_time", *in.PhpMaxInputTime, 86400); r != nil {
 						return r, nil, nil
 					}
+				}
+				if in.PhpMaxInputVars != nil {
+					if r := vMin("php_max_input_vars", *in.PhpMaxInputVars, 1); r != nil {
+						return r, nil, nil
+					}
+					if r := vMax("php_max_input_vars", *in.PhpMaxInputVars, 86400); r != nil {
+						return r, nil, nil
+					}
+				}
+				if in.DomainId == "." || in.DomainId == ".." {
+					return errResult("invalid domain_id: dot segments are not allowed"), nil, nil
 				}
 				path := "/domains/" + url.PathEscape(in.DomainId) + "/php-settings"
 				body := map[string]any{}
-				if in.PhpMaxExecutionTime != 0 {
-					body["php_max_execution_time"] = in.PhpMaxExecutionTime
+				if in.PhpMaxExecutionTime != nil {
+					body["php_max_execution_time"] = *in.PhpMaxExecutionTime
 				}
-				if in.PhpMaxInputTime != 0 {
-					body["php_max_input_time"] = in.PhpMaxInputTime
+				if in.PhpMaxInputTime != nil {
+					body["php_max_input_time"] = *in.PhpMaxInputTime
 				}
-				if in.PhpMaxInputVars != 0 {
-					body["php_max_input_vars"] = in.PhpMaxInputVars
+				if in.PhpMaxInputVars != nil {
+					body["php_max_input_vars"] = *in.PhpMaxInputVars
 				}
 				if in.PhpMemoryLimit != "" {
 					body["php_memory_limit"] = in.PhpMemoryLimit
@@ -1001,6 +1082,9 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 		}
 		mcp.AddTool(s, &mcp.Tool{Name: "delete_domain", Description: "delete_domain", Annotations: destructiveAnno()},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in DeleteDomainIn) (*mcp.CallToolResult, any, error) {
+				if in.DomainId == "." || in.DomainId == ".." {
+					return errResult("invalid domain_id: dot segments are not allowed"), nil, nil
+				}
 				path := "/domains/" + url.PathEscape(in.DomainId)
 				preview := "Destructive, irreversible — delete_domain. Target: " + path
 				return runWrite(ctx, reg, in, true, preview, reqSpec{http.MethodDelete, path, nil})
@@ -1015,6 +1099,9 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 		}
 		mcp.AddTool(s, &mcp.Tool{Name: "delete_dns_record", Description: "Delete a record", Annotations: destructiveAnno()},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in DeleteDnsRecordIn) (*mcp.CallToolResult, any, error) {
+				if in.RecordId == "." || in.RecordId == ".." {
+					return errResult("invalid record_id: dot segments are not allowed"), nil, nil
+				}
 				path := "/dns/records/" + url.PathEscape(in.RecordId)
 				preview := "Destructive, irreversible — Delete a record. Target: " + path
 				return runWrite(ctx, reg, in, true, preview, reqSpec{http.MethodDelete, path, nil})
@@ -1029,6 +1116,9 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 		}
 		mcp.AddTool(s, &mcp.Tool{Name: "delete_mailbox", Description: "delete_mailbox", Annotations: destructiveAnno()},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in DeleteMailboxIn) (*mcp.CallToolResult, any, error) {
+				if in.MailboxId == "." || in.MailboxId == ".." {
+					return errResult("invalid mailbox_id: dot segments are not allowed"), nil, nil
+				}
 				path := "/mailboxes/" + url.PathEscape(in.MailboxId)
 				preview := "Destructive, irreversible — delete_mailbox. Target: " + path
 				return runWrite(ctx, reg, in, true, preview, reqSpec{http.MethodDelete, path, nil})
@@ -1049,6 +1139,9 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 				if r := vMinLen("password", in.Password, 12); r != nil {
 					return r, nil, nil
 				}
+				if in.MailboxId == "." || in.MailboxId == ".." {
+					return errResult("invalid mailbox_id: dot segments are not allowed"), nil, nil
+				}
 				path := "/mailboxes/" + url.PathEscape(in.MailboxId) + "/password"
 				body := map[string]any{}
 				body["password"] = in.Password
@@ -1065,6 +1158,9 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 		}
 		mcp.AddTool(s, &mcp.Tool{Name: "restore_backup", Description: "Restore a snapshot", Annotations: destructiveAnno()},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in RestoreBackupIn) (*mcp.CallToolResult, any, error) {
+				if in.BackupId == "." || in.BackupId == ".." {
+					return errResult("invalid backup_id: dot segments are not allowed"), nil, nil
+				}
 				path := "/me/backups/" + url.PathEscape(in.BackupId) + "/restore"
 				preview := "Destructive, irreversible — Restore a snapshot. Target: " + path
 				return runWrite(ctx, reg, in, true, preview, reqSpec{http.MethodPost, path, nil})
@@ -1079,6 +1175,9 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 		}
 		mcp.AddTool(s, &mcp.Tool{Name: "disable_ssl", Description: "Disable SSL — revoke the domain's certificate and stop serving HTTPS", Annotations: destructiveAnno()},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in DisableSslIn) (*mcp.CallToolResult, any, error) {
+				if in.DomainId == "." || in.DomainId == ".." {
+					return errResult("invalid domain_id: dot segments are not allowed"), nil, nil
+				}
 				path := "/domains/" + url.PathEscape(in.DomainId) + "/ssl"
 				preview := "Destructive, irreversible — Disable SSL — revoke the domain's certificate and stop serving HTTPS. Target: " + path
 				return runWrite(ctx, reg, in, true, preview, reqSpec{http.MethodDelete, path, nil})
@@ -1093,6 +1192,9 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 		}
 		mcp.AddTool(s, &mcp.Tool{Name: "delete_cron_job", Description: "Delete a cron job", Annotations: destructiveAnno()},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in DeleteCronJobIn) (*mcp.CallToolResult, any, error) {
+				if in.CronId == "." || in.CronId == ".." {
+					return errResult("invalid cron_id: dot segments are not allowed"), nil, nil
+				}
 				path := "/cron/" + url.PathEscape(in.CronId)
 				preview := "Destructive, irreversible — Delete a cron job. Target: " + path
 				return runWrite(ctx, reg, in, true, preview, reqSpec{http.MethodDelete, path, nil})
@@ -1107,6 +1209,9 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 		}
 		mcp.AddTool(s, &mcp.Tool{Name: "delete_application", Description: "Uninstall an app and remove its files (async)", Annotations: destructiveAnno()},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in DeleteApplicationIn) (*mcp.CallToolResult, any, error) {
+				if in.ApplicationId == "." || in.ApplicationId == ".." {
+					return errResult("invalid application_id: dot segments are not allowed"), nil, nil
+				}
 				path := "/applications/" + url.PathEscape(in.ApplicationId)
 				preview := "Destructive, irreversible — Uninstall an app and remove its files (async). Target: " + path
 				return runWrite(ctx, reg, in, true, preview, reqSpec{http.MethodDelete, path, nil})
@@ -1117,11 +1222,14 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 			panelArg
 			dryRunArg
 			confirmArg
-			DatabasId string `json:"databas_id" jsonschema:"the databas's ULID"`
+			DatabaseId string `json:"database_id" jsonschema:"the database's ULID"`
 		}
 		mcp.AddTool(s, &mcp.Tool{Name: "delete_database", Description: "Drop a database and all its data", Annotations: destructiveAnno()},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in DeleteDatabaseIn) (*mcp.CallToolResult, any, error) {
-				path := "/databases/" + url.PathEscape(in.DatabasId)
+				if in.DatabaseId == "." || in.DatabaseId == ".." {
+					return errResult("invalid database_id: dot segments are not allowed"), nil, nil
+				}
+				path := "/databases/" + url.PathEscape(in.DatabaseId)
 				preview := "Destructive, irreversible — Drop a database and all its data. Target: " + path
 				return runWrite(ctx, reg, in, true, preview, reqSpec{http.MethodDelete, path, nil})
 			})
@@ -1135,6 +1243,9 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 		}
 		mcp.AddTool(s, &mcp.Tool{Name: "delete_database_user", Description: "Delete a database user (revokes all its grants)", Annotations: destructiveAnno()},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in DeleteDatabaseUserIn) (*mcp.CallToolResult, any, error) {
+				if in.DatabaseUserId == "." || in.DatabaseUserId == ".." {
+					return errResult("invalid database_user_id: dot segments are not allowed"), nil, nil
+				}
 				path := "/database-users/" + url.PathEscape(in.DatabaseUserId)
 				preview := "Destructive, irreversible — Delete a database user (revokes all its grants). Target: " + path
 				return runWrite(ctx, reg, in, true, preview, reqSpec{http.MethodDelete, path, nil})
@@ -1149,6 +1260,9 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 		}
 		mcp.AddTool(s, &mcp.Tool{Name: "revoke_database_access", Description: "Revoke one database grant (keeps the user)", Annotations: destructiveAnno()},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in RevokeDatabaseAccessIn) (*mcp.CallToolResult, any, error) {
+				if in.DatabaseUserGrantId == "." || in.DatabaseUserGrantId == ".." {
+					return errResult("invalid database_user_grant_id: dot segments are not allowed"), nil, nil
+				}
 				path := "/database-user-grants/" + url.PathEscape(in.DatabaseUserGrantId)
 				preview := "Destructive, irreversible — Revoke one database grant (keeps the user). Target: " + path
 				return runWrite(ctx, reg, in, true, preview, reqSpec{http.MethodDelete, path, nil})
@@ -1164,6 +1278,9 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 		}
 		mcp.AddTool(s, &mcp.Tool{Name: "rotate_database_password", Description: "Rotate a database user's password (returns the new password once)", Annotations: destructiveAnno()},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in RotateDatabasePasswordIn) (*mcp.CallToolResult, any, error) {
+				if in.DatabaseUserId == "." || in.DatabaseUserId == ".." {
+					return errResult("invalid database_user_id: dot segments are not allowed"), nil, nil
+				}
 				path := "/database-users/" + url.PathEscape(in.DatabaseUserId) + "/rotate-password"
 				body := map[string]any{}
 				body["new_password"] = in.NewPassword
@@ -1180,6 +1297,9 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 		}
 		mcp.AddTool(s, &mcp.Tool{Name: "delete_autoresponder", Description: "Remove a mailbox's autoresponder", Annotations: destructiveAnno()},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in DeleteAutoresponderIn) (*mcp.CallToolResult, any, error) {
+				if in.MailboxId == "." || in.MailboxId == ".." {
+					return errResult("invalid mailbox_id: dot segments are not allowed"), nil, nil
+				}
 				path := "/mailboxes/" + url.PathEscape(in.MailboxId) + "/autoresponder"
 				preview := "Destructive, irreversible — Remove a mailbox's autoresponder. Target: " + path
 				return runWrite(ctx, reg, in, true, preview, reqSpec{http.MethodDelete, path, nil})
@@ -1195,6 +1315,9 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 		}
 		mcp.AddTool(s, &mcp.Tool{Name: "rotate_mailbox_password", Description: "Rotate a mailbox password (returns the new password once)", Annotations: destructiveAnno()},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in RotateMailboxPasswordIn) (*mcp.CallToolResult, any, error) {
+				if in.MailboxId == "." || in.MailboxId == ".." {
+					return errResult("invalid mailbox_id: dot segments are not allowed"), nil, nil
+				}
 				path := "/mailboxes/" + url.PathEscape(in.MailboxId) + "/rotate-password"
 				body := map[string]any{}
 				if in.NewPassword != "" {
@@ -1213,6 +1336,9 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 		}
 		mcp.AddTool(s, &mcp.Tool{Name: "delete_backup", Description: "Delete a snapshot (forgets + prunes its data)", Annotations: destructiveAnno()},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in DeleteBackupIn) (*mcp.CallToolResult, any, error) {
+				if in.BackupId == "." || in.BackupId == ".." {
+					return errResult("invalid backup_id: dot segments are not allowed"), nil, nil
+				}
 				path := "/me/backups/" + url.PathEscape(in.BackupId)
 				preview := "Destructive, irreversible — Delete a snapshot (forgets + prunes its data). Target: " + path
 				return runWrite(ctx, reg, in, true, preview, reqSpec{http.MethodDelete, path, nil})
@@ -1227,6 +1353,9 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 		}
 		mcp.AddTool(s, &mcp.Tool{Name: "delete_ssh_key", Description: "Remove an SSH key (revokes its access)", Annotations: destructiveAnno()},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in DeleteSshKeyIn) (*mcp.CallToolResult, any, error) {
+				if in.SshKeyId == "." || in.SshKeyId == ".." {
+					return errResult("invalid ssh_key_id: dot segments are not allowed"), nil, nil
+				}
 				path := "/ssh-keys/" + url.PathEscape(in.SshKeyId)
 				preview := "Destructive, irreversible — Remove an SSH key (revokes its access). Target: " + path
 				return runWrite(ctx, reg, in, true, preview, reqSpec{http.MethodDelete, path, nil})

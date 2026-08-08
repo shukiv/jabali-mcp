@@ -132,15 +132,40 @@ func runWrite[In any](ctx context.Context, reg *client.Registry, in In, gated bo
 	return execReq(ctx, c, spec)
 }
 
-// describeReq renders a request for a dry-run preview.
+// describeReq renders a request for a dry-run preview. Map bodies have
+// secret-looking values redacted: a preview must never echo back a plaintext
+// password the caller passed in.
 func describeReq(spec reqSpec) string {
 	s := spec.method + " " + spec.path
 	if spec.body != nil {
-		if b, err := json.Marshal(spec.body); err == nil {
+		if b, err := json.Marshal(redactSecrets(spec.body)); err == nil {
 			s += "\nbody: " + string(b)
 		}
 	}
 	return s
+}
+
+// secretKeySubstrings marks map keys whose values are replaced with "***" in
+// previews. Deliberately excludes "key" — public_key is not a secret.
+var secretKeySubstrings = []string{"password", "secret", "token"}
+
+func redactSecrets(body any) any {
+	m, ok := body.(map[string]any)
+	if !ok {
+		return body
+	}
+	out := make(map[string]any, len(m))
+	for k, v := range m {
+		lk := strings.ToLower(k)
+		for _, sub := range secretKeySubstrings {
+			if strings.Contains(lk, sub) {
+				v = "***"
+				break
+			}
+		}
+		out[k] = v
+	}
+	return out
 }
 
 func execReq(ctx context.Context, c *client.Client, spec reqSpec) (*mcp.CallToolResult, any, error) {
