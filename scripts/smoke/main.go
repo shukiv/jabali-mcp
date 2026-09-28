@@ -23,6 +23,10 @@ type check struct {
 	tool string
 	args map[string]any
 	want string // substring expected in the text result (empty = any non-error)
+	// okErr: an error result containing this substring still passes. The panel
+	// answered from the route, and the error is about the probe's data (e.g. the
+	// probe domain has no certificate), not about the tool.
+	okErr string
 }
 
 func main() {
@@ -73,13 +77,24 @@ func main() {
 		{tool: "list_app_catalog", args: map[string]any{}},
 		{tool: "list_database_users", args: map[string]any{}},
 		{tool: "list_activity", args: map[string]any{"page_size": 1}},
+		{tool: "list_forwarders", args: map[string]any{"page_size": 1}},
+	}
+	// Admin reads, only when the caller already opted into the admin surface
+	// (the tools are not registered otherwise). No admin write is exercised:
+	// admin_run_updates would start a real update on the panel.
+	if os.Getenv("JABALI_MCP_ADMIN") == "1" {
+		checks = append(checks,
+			check{tool: "admin_list_users", args: map[string]any{"page_size": 1}},
+			check{tool: "admin_get_update_status", args: map[string]any{}},
+		)
 	}
 	if domainID != "" {
 		checks = append(checks,
-			check{tool: "get_ssl_status", args: map[string]any{"domain_id": domainID}},
+			check{tool: "get_ssl_status", args: map[string]any{"domain_id": domainID}, okErr: "no_certificate"},
 			check{tool: "get_php_settings", args: map[string]any{"domain_id": domainID}},
 			check{tool: "enable_ssl", args: map[string]any{"domain_id": domainID}, want: "DRY RUN"},
 			check{tool: "delete_cron_job", args: map[string]any{"cron_id": "01SMOKETESTFAKEID000000000"}, want: "DRY RUN"},
+			check{tool: "create_forwarder", args: map[string]any{"mailbox_id": "01SMOKETESTFAKEID000000000", "type": "external", "target": "smoke@example.com"}, want: "POST /mailboxes/01SMOKETESTFAKEID000000000/forwarders"},
 		)
 	}
 	// Validation check: bad enum must be rejected by the SDK against the
@@ -102,7 +117,7 @@ func main() {
 			status, detail = "FAIL", err.Error()
 		case c.want != "" && !strings.Contains(text(res), c.want):
 			status, detail = "FAIL", trunc(text(res), 120)
-		case c.want == "" && res.IsError:
+		case c.want == "" && res.IsError && (c.okErr == "" || !strings.Contains(text(res), c.okErr)):
 			status, detail = "FAIL", trunc(text(res), 120)
 		default:
 			detail = trunc(text(res), 80)
