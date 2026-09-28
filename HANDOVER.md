@@ -207,11 +207,14 @@ All merged to `jabali-panel` main (`01c2adaf`) and deployed to testserver:
   `GET /mail/logs` for the MCP.
 - **PR #955** — closed as superseded by #961 (one-line OpenAPI YAML quote fix).
 
-**Trap fixed at merge time (`01c2adaf`):** the panel has **two** OpenAPI files.
-`docs/api/openapi.yaml` is the human/docs spec; the CI coverage golden
-(`TestOpenAPICoverage` in `panel-api/internal/app`) gates on
-`panel-api/internal/api/openapi.yaml`. A new route must be documented in the
-**internal** one or the app-package test fails.
+**Trap fixed at merge time (`01c2adaf`):** the panel used to have **two**
+OpenAPI files, and only `panel-api/internal/api/openapi.yaml` is gated by CI
+(`TestOpenAPICoverage` in `panel-api/internal/app`). Since jabali-panel #1930
+the other one (`docs/api/openapi.yaml`) is gone: the embedded
+`panel-api/internal/api/openapi.yaml` is the only spec, served at
+`/api/v1/_meta/openapi.yaml`, and `openapi/panel-routes.txt` here is pinned
+from it (`make panel-routes`). A new route must be documented there or the
+app-package test fails.
 
 ## Traps already hit (don't rediscover these)
 

@@ -21,8 +21,10 @@ Jabali Panel REST API  ──►  ownership check (claims.UserID == resource.Use
 - **Auth = per-user Bearer token** (`jat_…`). The token acts as its user and the
   panel enforces ownership server-side, so the MCP inherits the panel's tenant
   isolation with no extra work. (An earlier draft assumed the HMAC automation
-  API; the documented Bearer path in `docs/api/openapi.yaml` is simpler and
-  already ownership-scoped, so we use it.)
+  API; the documented Bearer path in the panel's OpenAPI spec
+  (`panel-api/internal/api/openapi.yaml`, served at
+  `/api/v1/_meta/openapi.yaml`) is simpler and already ownership-scoped, so we
+  use it.)
 - **Tools** are hand-written from the OpenAPI spec today, one per operation.
   Generating them from the spec is the next step (`internal/gen`).
 - **Fleet** is a registry of named clients; a tool's optional `panel` argument
