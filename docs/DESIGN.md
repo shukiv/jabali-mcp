@@ -35,7 +35,7 @@ Jabali Panel REST API  ──►  ownership check (claims.UserID == resource.Use
    dangerous — avoid unless the task genuinely needs it.
 2. **Read-only default.** Write tools register only when
    `JABALI_MCP_ALLOW_WRITE=1`.
-3. **Confirm gate on destructive tools.** delete_*, set_mailbox_password, and
+3. **Confirm gate on destructive tools.** delete_*, rotate_*_password, and
    restore_backup return a preview and act only on a second call with
    `confirm: true`. This is the guard against a prompt-injected destructive
    call — the model reads tenant-controlled data (domain names, records) and

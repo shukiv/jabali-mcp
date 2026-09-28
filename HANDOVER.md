@@ -120,7 +120,7 @@ Refresh flow after a panel API change: copy the new spec in, adjust curation,
    the METHOD/path/body it would send; `JABALI_MCP_DRY_RUN=1` forces this
    globally. Dry-run is checked **before** the confirm gate so you can preview
    a destructive call without confirming it.
-3. **Confirm gate** — destructive tools (`delete_*`, `set_mailbox_password`,
+3. **Confirm gate** — destructive tools (`delete_*`, `rotate_*_password`,
    `restore_backup`, `admin_run_updates`) return a preview and act only when
    re-called with `confirm: true`. A prompt-injected single tool call cannot
    destroy state.
