@@ -19,7 +19,27 @@ func main() {
 	group := flag.String("group", "", `registration group: "" for tenant, "Admin" for admin`)
 	docs := flag.Bool("docs", false, "emit the markdown tool reference instead of Go source (-curation is the tenant file; the admin file is derived from its directory)")
 	adminCuration := flag.String("admin-curation", "openapi/admin-tools.yaml", "path to the admin curation file (docs mode)")
+	panelRoutes := flag.Bool("panel-routes", false, "write the panel route pin (openapi/panel-routes.txt) from the panel's embedded spec given as -spec")
+	source := flag.String("source", "", "panel commit the -spec was read from (panel-routes mode; recorded in the file header)")
 	flag.Parse()
+
+	if *panelRoutes {
+		if *source == "" {
+			fmt.Fprintln(os.Stderr, "gen-tools: -panel-routes needs -source (the panel commit the spec came from)")
+			os.Exit(1)
+		}
+		routes, err := gen.PanelRoutes(*spec)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "gen-tools:", err)
+			os.Exit(1)
+		}
+		if err := os.WriteFile(*out, gen.PanelRoutesFile(routes, *source), 0o644); err != nil {
+			fmt.Fprintln(os.Stderr, "gen-tools:", err)
+			os.Exit(1)
+		}
+		fmt.Printf("gen-tools: wrote %s (%d routes)\n", *out, len(routes))
+		return
+	}
 
 	if *docs {
 		md, err := gen.GenerateDocs(*spec, *curation, *adminCuration)

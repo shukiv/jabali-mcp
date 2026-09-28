@@ -18,7 +18,7 @@ tools:
   - { op: "GET /domains/{id}",               name: get_domain,        group: read }
   - { op: "GET /domains/{id}/dns/records",   name: list_dns_records,  group: read }
   - { op: "GET /domains/{id}/mailboxes",     name: list_mailboxes,    group: read }
-  - { op: "GET /domains/{id}/forwarders",    name: list_forwarders,   group: read }
+  - { op: "GET /mail/forwarders",           name: list_forwarders,   group: read }
   - { op: "GET /applications",               name: list_applications, group: read, paginated: true }
   - { op: "GET /databases",                  name: list_databases,    group: read, paginated: true }
   - { op: "GET /me/backups",                 name: list_backups,      group: read, paginated: true }
@@ -53,7 +53,7 @@ tools:
   - { op: "POST /domains/{id}/dns/records",  name: create_dns_record, group: write }
   - { op: "PATCH /dns/records/{id}",         name: update_dns_record, group: write }
   - { op: "POST /domains/{id}/mailboxes",    name: create_mailbox,    group: write }
-  - { op: "POST /domains/{id}/forwarders",   name: create_forwarder,  group: write }
+  - { op: "POST /mailboxes/{id}/forwarders", name: create_forwarder,  group: write }
   - { op: "POST /me/backups",                name: create_backup,     group: write }
   - { op: "POST /applications",              name: install_application, group: write }
   - { op: "POST /databases",                 name: create_database,   group: write }
@@ -72,7 +72,6 @@ tools:
   - { op: "DELETE /domains/{id}",            name: delete_domain,        group: write, destructive: true }
   - { op: "DELETE /dns/records/{id}",        name: delete_dns_record,    group: write, destructive: true }
   - { op: "DELETE /mailboxes/{id}",          name: delete_mailbox,       group: write, destructive: true }
-  - { op: "PUT /mailboxes/{id}/password",    name: set_mailbox_password, group: write, destructive: true }
   - { op: "POST /me/backups/{id}/restore",   name: restore_backup,       group: write, destructive: true }
   - { op: "DELETE /domains/{id}/ssl",        name: disable_ssl,          group: write, destructive: true }
   - { op: "DELETE /cron/{id}",               name: delete_cron_job,      group: write, destructive: true }

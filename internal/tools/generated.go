@@ -73,14 +73,39 @@ func registerRead(s *mcp.Server, reg *client.Registry) {
 	{
 		type ListForwardersIn struct {
 			panelArg
-			DomainId string `json:"domain_id" jsonschema:"the domain's ULID"`
+			Page     *int `json:"page,omitempty" jsonschema:"page number, from 1 (default 1)"`
+			PageSize *int `json:"page_size,omitempty" jsonschema:"rows per page (default 50, max 200)"`
 		}
-		mcp.AddTool(s, &mcp.Tool{Name: "list_forwarders", Description: "list_forwarders", Annotations: roAnno()},
+		schema := inferSchema[ListForwardersIn]()
+		schema.Properties["page"].Minimum = f64(1)
+		schema.Properties["page_size"].Minimum = f64(1)
+		schema.Properties["page_size"].Maximum = f64(200)
+		mcp.AddTool(s, &mcp.Tool{Name: "list_forwarders", Description: "List the forwarders and aliases on your mailboxes, across all your domains", Annotations: roAnno(), InputSchema: schema},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in ListForwardersIn) (*mcp.CallToolResult, any, error) {
-				if in.DomainId == "." || in.DomainId == ".." {
-					return errResult("invalid domain_id: dot segments are not allowed"), nil, nil
+				if in.Page != nil {
+					if r := vMin("page", *in.Page, 1); r != nil {
+						return r, nil, nil
+					}
 				}
-				path := "/domains/" + url.PathEscape(in.DomainId) + "/forwarders"
+				if in.PageSize != nil {
+					if r := vMin("page_size", *in.PageSize, 1); r != nil {
+						return r, nil, nil
+					}
+					if r := vMax("page_size", *in.PageSize, 200); r != nil {
+						return r, nil, nil
+					}
+				}
+				path := "/mail/forwarders"
+				q := url.Values{}
+				if in.Page != nil {
+					q.Set("page", strconv.Itoa(*in.Page))
+				}
+				if in.PageSize != nil {
+					q.Set("page_size", strconv.Itoa(*in.PageSize))
+				}
+				if enc := q.Encode(); enc != "" {
+					path += "?" + enc
+				}
 				return runRead(ctx, reg, in, reqSpec{http.MethodGet, path, nil})
 			})
 	}
@@ -705,19 +730,34 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 		type CreateForwarderIn struct {
 			panelArg
 			dryRunArg
-			DomainId string `json:"domain_id" jsonschema:"the domain's ULID"`
-			Dest     string `json:"dest" jsonschema:"e.g. alice@example.com"`
-			Source   string `json:"source" jsonschema:"e.g. sales@example.com"`
+			MailboxId string `json:"mailbox_id" jsonschema:"the mailbox's ULID"`
+			KeepCopy  *bool  `json:"keep_copy,omitempty" jsonschema:"external only: also keep a copy in the mailbox"`
+			LocalPart string `json:"local_part,omitempty" jsonschema:"alias only, and required for it: the alias address's local part, e.g. sales"`
+			Target    string `json:"target,omitempty" jsonschema:"external only, and needed for it: the address to forward to. Omit for an alias"`
+			Type      string `json:"type" jsonschema:"alias = another address on the mailbox's domain delivers into this mailbox; external = forward this mailbox's mail to another address"`
 		}
-		mcp.AddTool(s, &mcp.Tool{Name: "create_forwarder", Description: "create_forwarder", Annotations: additiveAnno()},
+		schema := inferSchema[CreateForwarderIn]()
+		schema.Properties["type"].Enum = enumVals("alias", "external")
+		mcp.AddTool(s, &mcp.Tool{Name: "create_forwarder", Description: "Add a forwarder or an alias to a mailbox", Annotations: additiveAnno(), InputSchema: schema},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in CreateForwarderIn) (*mcp.CallToolResult, any, error) {
-				if in.DomainId == "." || in.DomainId == ".." {
-					return errResult("invalid domain_id: dot segments are not allowed"), nil, nil
+				if r := vEnum("type", in.Type, []string{"alias", "external"}); r != nil {
+					return r, nil, nil
 				}
-				path := "/domains/" + url.PathEscape(in.DomainId) + "/forwarders"
+				if in.MailboxId == "." || in.MailboxId == ".." {
+					return errResult("invalid mailbox_id: dot segments are not allowed"), nil, nil
+				}
+				path := "/mailboxes/" + url.PathEscape(in.MailboxId) + "/forwarders"
 				body := map[string]any{}
-				body["dest"] = in.Dest
-				body["source"] = in.Source
+				if in.KeepCopy != nil {
+					body["keep_copy"] = *in.KeepCopy
+				}
+				if in.LocalPart != "" {
+					body["local_part"] = in.LocalPart
+				}
+				if in.Target != "" {
+					body["target"] = in.Target
+				}
+				body["type"] = in.Type
 				return runWrite(ctx, reg, in, false, "", reqSpec{http.MethodPost, path, body})
 			})
 	}
@@ -1122,31 +1162,6 @@ func registerWrite(s *mcp.Server, reg *client.Registry) {
 				path := "/mailboxes/" + url.PathEscape(in.MailboxId)
 				preview := "Destructive, irreversible — delete_mailbox. Target: " + path
 				return runWrite(ctx, reg, in, true, preview, reqSpec{http.MethodDelete, path, nil})
-			})
-	}
-	{
-		type SetMailboxPasswordIn struct {
-			panelArg
-			dryRunArg
-			confirmArg
-			MailboxId string `json:"mailbox_id" jsonschema:"the mailbox's ULID"`
-			Password  string `json:"password" jsonschema:"password"`
-		}
-		schema := inferSchema[SetMailboxPasswordIn]()
-		schema.Properties["password"].MinLength = iptr(12)
-		mcp.AddTool(s, &mcp.Tool{Name: "set_mailbox_password", Description: "Change mailbox password", Annotations: destructiveAnno(), InputSchema: schema},
-			func(ctx context.Context, _ *mcp.CallToolRequest, in SetMailboxPasswordIn) (*mcp.CallToolResult, any, error) {
-				if r := vMinLen("password", in.Password, 12); r != nil {
-					return r, nil, nil
-				}
-				if in.MailboxId == "." || in.MailboxId == ".." {
-					return errResult("invalid mailbox_id: dot segments are not allowed"), nil, nil
-				}
-				path := "/mailboxes/" + url.PathEscape(in.MailboxId) + "/password"
-				body := map[string]any{}
-				body["password"] = in.Password
-				preview := "Destructive, irreversible — Change mailbox password. Target: " + path
-				return runWrite(ctx, reg, in, true, preview, reqSpec{http.MethodPut, path, body})
 			})
 	}
 	{

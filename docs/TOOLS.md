@@ -53,13 +53,14 @@ list_mailboxes
 
 ### list_forwarders
 
-list_forwarders
+List the forwarders and aliases on your mailboxes, across all your domains
 
-`GET /domains/{id}/forwarders`
+`GET /mail/forwarders`
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
-| `domain_id` | string | ✓ | the domain's ULID |
+| `page` | integer |  | page number, from 1 (default 1) (min 1) |
+| `page_size` | integer |  | rows per page (default 50, max 200) (min 1; max 200) |
 
 ### list_applications
 
@@ -398,15 +399,17 @@ create_mailbox
 
 ### create_forwarder
 
-create_forwarder
+Add a forwarder or an alias to a mailbox
 
-`POST /domains/{id}/forwarders`
+`POST /mailboxes/{id}/forwarders`
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
-| `domain_id` | string | ✓ | the domain's ULID |
-| `dest` | string | ✓ | e.g. alice@example.com |
-| `source` | string | ✓ | e.g. sales@example.com |
+| `mailbox_id` | string | ✓ | the mailbox's ULID |
+| `keep_copy` | boolean |  | external only: also keep a copy in the mailbox |
+| `local_part` | string |  | alias only, and required for it: the alias address's local part, e.g. sales |
+| `target` | string |  | external only, and needed for it: the address to forward to. Omit for an alias |
+| `type` | string | ✓ | alias = another address on the mailbox's domain delivers into this mailbox; external = forward this mailbox's mail to another address (one of: alias, external) |
 
 ### create_backup
 
@@ -597,17 +600,6 @@ delete_mailbox
 |---|---|---|---|
 | `mailbox_id` | string | ✓ | the mailbox's ULID |
 
-### set_mailbox_password
-
-Change mailbox password
-
-`PUT /mailboxes/{id}/password`
-
-| Argument | Type | Required | Description |
-|---|---|---|---|
-| `mailbox_id` | string | ✓ | the mailbox's ULID |
-| `password` | string | ✓ | password (min length 12) |
-
 ### restore_backup
 
 Restore a snapshot
@@ -791,7 +783,7 @@ ignored.
 
 List all panel users (admin)
 
-`GET /admin/users`
+`GET /users`
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
@@ -801,15 +793,19 @@ List all panel users (admin)
 
 ### admin_create_user
 
-Create a tenant user (admin)
+Create a panel user (admin)
 
-`POST /admin/users`
+`POST /users`
 
 | Argument | Type | Required | Description |
 |---|---|---|---|
-| `email` | string | ✓ | email |
+| `email` | string |  | optional contact address |
 | `is_admin` | boolean |  | is admin |
-| `password` | string | ✓ | password (min length 12) |
+| `name_first` | string |  | name first |
+| `name_last` | string |  | name last |
+| `package_id` | string |  | hosting package ID |
+| `password` | string | ✓ | at least 12 characters (the panel accepts 10; this tool asks for more) (min length 12) |
+| `username` | string |  | login and Linux account name: a lowercase letter or _ first, then up to 31 of a-z 0-9 _ -. Omit to derive it from the email's local part |
 
 ### admin_get_settings
 
@@ -832,7 +828,17 @@ Update server-wide settings (admin)
 
 Trigger `jabali update` (admin)
 
-`POST /admin/updates/run`
+`POST /admin/updates/jabali/run`
+
+### admin_get_update_status
+
+Read the state and log of the `jabali update` run (admin)
+
+`GET /admin/updates/jabali/status`
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `since` | string |  | RFC 3339 time to read the log from, e.g. the run's started_at (default: 15 minutes ago) |
 
 ### admin_renew_ssl
 

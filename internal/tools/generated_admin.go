@@ -22,7 +22,7 @@ func registerAdminRead(s *mcp.Server, reg *client.Registry) {
 		}
 		mcp.AddTool(s, &mcp.Tool{Name: "admin_list_users", Description: "List all panel users (admin)", Annotations: roAnno()},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in AdminListUsersIn) (*mcp.CallToolResult, any, error) {
-				path := "/admin/users"
+				path := "/users"
 				path += listQuery(in.Page, in.PageSize, in.Q)
 				return runRead(ctx, reg, in, reqSpec{http.MethodGet, path, nil})
 			})
@@ -37,6 +37,24 @@ func registerAdminRead(s *mcp.Server, reg *client.Registry) {
 				return runRead(ctx, reg, in, reqSpec{http.MethodGet, path, nil})
 			})
 	}
+	{
+		type AdminGetUpdateStatusIn struct {
+			panelArg
+			Since string `json:"since,omitempty" jsonschema:"RFC 3339 time to read the log from, e.g. the run's started_at (default: 15 minutes ago)"`
+		}
+		mcp.AddTool(s, &mcp.Tool{Name: "admin_get_update_status", Description: "Read the state and log of the `jabali update` run (admin)", Annotations: roAnno()},
+			func(ctx context.Context, _ *mcp.CallToolRequest, in AdminGetUpdateStatusIn) (*mcp.CallToolResult, any, error) {
+				path := "/admin/updates/jabali/status"
+				q := url.Values{}
+				if in.Since != "" {
+					q.Set("since", in.Since)
+				}
+				if enc := q.Encode(); enc != "" {
+					path += "?" + enc
+				}
+				return runRead(ctx, reg, in, reqSpec{http.MethodGet, path, nil})
+			})
+	}
 }
 
 func registerAdminWrite(s *mcp.Server, reg *client.Registry) {
@@ -44,24 +62,42 @@ func registerAdminWrite(s *mcp.Server, reg *client.Registry) {
 		type AdminCreateUserIn struct {
 			panelArg
 			dryRunArg
-			Email    string `json:"email" jsonschema:"email"`
-			IsAdmin  *bool  `json:"is_admin,omitempty" jsonschema:"is admin"`
-			Password string `json:"password" jsonschema:"password"`
+			Email     string `json:"email,omitempty" jsonschema:"optional contact address"`
+			IsAdmin   *bool  `json:"is_admin,omitempty" jsonschema:"is admin"`
+			NameFirst string `json:"name_first,omitempty" jsonschema:"name first"`
+			NameLast  string `json:"name_last,omitempty" jsonschema:"name last"`
+			PackageId string `json:"package_id,omitempty" jsonschema:"hosting package ID"`
+			Password  string `json:"password" jsonschema:"at least 12 characters (the panel accepts 10; this tool asks for more)"`
+			Username  string `json:"username,omitempty" jsonschema:"login and Linux account name: a lowercase letter or _ first, then up to 31 of a-z 0-9 _ -. Omit to derive it from the email's local part"`
 		}
 		schema := inferSchema[AdminCreateUserIn]()
 		schema.Properties["password"].MinLength = iptr(12)
-		mcp.AddTool(s, &mcp.Tool{Name: "admin_create_user", Description: "Create a tenant user (admin)", Annotations: additiveAnno(), InputSchema: schema},
+		mcp.AddTool(s, &mcp.Tool{Name: "admin_create_user", Description: "Create a panel user (admin)", Annotations: additiveAnno(), InputSchema: schema},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in AdminCreateUserIn) (*mcp.CallToolResult, any, error) {
 				if r := vMinLen("password", in.Password, 12); r != nil {
 					return r, nil, nil
 				}
-				path := "/admin/users"
+				path := "/users"
 				body := map[string]any{}
-				body["email"] = in.Email
+				if in.Email != "" {
+					body["email"] = in.Email
+				}
 				if in.IsAdmin != nil {
 					body["is_admin"] = *in.IsAdmin
 				}
+				if in.NameFirst != "" {
+					body["name_first"] = in.NameFirst
+				}
+				if in.NameLast != "" {
+					body["name_last"] = in.NameLast
+				}
+				if in.PackageId != "" {
+					body["package_id"] = in.PackageId
+				}
 				body["password"] = in.Password
+				if in.Username != "" {
+					body["username"] = in.Username
+				}
 				return runWrite(ctx, reg, in, false, "", reqSpec{http.MethodPost, path, body})
 			})
 	}
@@ -104,7 +140,7 @@ func registerAdminWrite(s *mcp.Server, reg *client.Registry) {
 		}
 		mcp.AddTool(s, &mcp.Tool{Name: "admin_run_updates", Description: "Trigger `jabali update` (admin)", Annotations: destructiveAnno()},
 			func(ctx context.Context, _ *mcp.CallToolRequest, in AdminRunUpdatesIn) (*mcp.CallToolResult, any, error) {
-				path := "/admin/updates/run"
+				path := "/admin/updates/jabali/run"
 				preview := "Destructive, irreversible — Trigger `jabali update` (admin). Target: " + path
 				return runWrite(ctx, reg, in, true, preview, reqSpec{http.MethodPost, path, nil})
 			})

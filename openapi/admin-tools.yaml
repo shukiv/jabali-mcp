@@ -6,11 +6,14 @@
 # radius than the tenant tools. Same fields as tools.yaml.
 
 tools:
-  - { op: "GET /admin/users",         name: admin_list_users,      group: read, paginated: true }
-  - { op: "POST /admin/users",        name: admin_create_user,     group: write }
+  # /users lives outside /admin/ but the panel registers it behind
+  # RequireAdmin (panel-api/internal/api/users.go); there is no /admin/users.
+  - { op: "GET /users",               name: admin_list_users,      group: read, paginated: true }
+  - { op: "POST /users",              name: admin_create_user,     group: write }
   - { op: "GET /admin/settings",      name: admin_get_settings,    group: read }
   - { op: "PATCH /admin/settings",    name: admin_update_settings, group: write }
-  - { op: "POST /admin/updates/run",  name: admin_run_updates,     group: write, destructive: true }
+  - { op: "POST /admin/updates/jabali/run", name: admin_run_updates, group: write, destructive: true }
+  - { op: "GET /admin/updates/jabali/status", name: admin_get_update_status, group: read }
   # SSL ops that live under tenant paths but are RequireAdmin in the panel
   # (verified in panel-api/internal/api/ssl.go — renewSSL/retrySSL).
   - { op: "POST /domains/{id}/ssl/renew", name: admin_renew_ssl,   group: write }

@@ -261,8 +261,8 @@ first (default) panel.
 
 ## Admin tools (same binary, separate opt-in)
 
-The `/admin/*` operator surface (list/create users, read/update server settings,
-run panel updates) lives in the **same binary** but a **separate registration
+The admin operator surface (list/create users, read/update server settings,
+run panel updates and read their status) lives in the **same binary** but a **separate registration
 group**, exposed only with `JABALI_MCP_ADMIN=1`. It fronts whole-box operations —
 a far larger blast radius than the tenant tools — so it is deliberately opt-in and
 requires an **admin token** (the panel's `RequireAdmin` rejects a non-admin token
@@ -285,8 +285,8 @@ This fronts a hosting control plane, so mutation is fenced in four layers:
 
 1. **Read-only by default.** Write tools register only with `JABALI_MCP_ALLOW_WRITE=1`.
 2. **Destructive tools require `confirm: true`.** Every `delete_*` /
-   `revoke_*` / `rotate_*_password` tool (plus `set_mailbox_password`,
-   `restore_backup`, `disable_ssl`) returns a preview and acts only when
+   `revoke_*` / `rotate_*_password` tool (plus `restore_backup`,
+   `disable_ssl`) returns a preview and acts only when
    re-called with `confirm: true`. A model cannot destroy state in one step —
    the guard against a prompt-injected tool call.
 3. **Tool hints.** Read tools carry `readOnlyHint`; destructive tools carry
@@ -331,7 +331,7 @@ origin-restricted fetches; override the source with `JABALI_DOCS_URL`).
 `create_cron_job`, `update_cron_job`, `run_cron_job`, `create_database_user`,
 `grant_database_access`, `update_mailbox`, `set_autoresponder`, `add_ssh_key`,
 `update_php_settings` — plus the confirm-gated destructive set: `delete_domain`,
-`delete_dns_record`, `delete_mailbox`, `set_mailbox_password`, `restore_backup`,
+`delete_dns_record`, `delete_mailbox`, `restore_backup`,
 `disable_ssl`, `delete_cron_job`, `delete_application`, `delete_database`,
 `delete_database_user`, `revoke_database_access`, `rotate_database_password`,
 `delete_autoresponder`, `rotate_mailbox_password`, `delete_backup`,
@@ -349,9 +349,17 @@ Tools are generated, not hand-written, so the surface can't drift from the API:
   with `make gen` or `go generate ./...`.
 - A curation entry naming an operation the spec lacks is a hard error (drift
   guard), and `TestGeneratedIsUpToDate` fails if the committed file is stale.
+- `openapi/panel-routes.txt` pins the routes the panel really serves, read from
+  the panel's embedded spec (`panel-api/internal/api/openapi.yaml`, which the
+  panel's own tests hold to its registered routes). `TestCuratedOpsArePanelRoutes`
+  fails for any curated operation missing from it: that tool would 404. The
+  vendored spec is a hand-edited copy and cannot catch this on its own.
 
-To refresh after the panel API changes: copy the new `openapi.yaml` in, adjust
-`tools.yaml`, run `make gen`, review the diff.
+To refresh after the panel API changes: run `make panel-routes` (reads
+`origin/main` of `../jabali2`; override with `PANEL_REPO=` / `PANEL_REF=`),
+merge the changed operations into `openapi.yaml` by hand (a wholesale copy
+loses the request bodies written here), adjust `tools.yaml`, run `make gen`,
+review the diff.
 
 ## Development
 

@@ -551,31 +551,23 @@ paths:
                 new_password: { type: string, format: password, description: "omit to auto-generate a strong password" }
       responses: { "200": { description: "New password (shown once — save it immediately)" } }
 
-  /mailboxes/{id}/password:
-    put:
-      tags: [Mailboxes]
-      summary: Change mailbox password
-      parameters: [ { in: path, name: id, required: true, schema: { type: string, format: ulid } } ]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [password]
-              properties:
-                password: { type: string, format: password, minLength: 12 }
-      responses: { "204": { description: Changed } }
-
   # -------------------------------------------------------- Forwarders ---
+  # Handler: panel-api/internal/api/mailbox_forwarder.go. Forwarders hang off
+  # a mailbox; there is no per-domain forwarder route.
 
-  /domains/{id}/forwarders:
+  /mail/forwarders:
     get:
       tags: [Mailbox Forwarders]
-      parameters: [ { in: path, name: id, required: true, schema: { type: string, format: ulid } } ]
-      responses: { "200": { description: OK } }
+      summary: List the forwarders and aliases on your mailboxes, across all your domains
+      parameters:
+        - { in: query, name: page, schema: { type: integer, minimum: 1, description: "page number, from 1 (default 1)" } }
+        - { in: query, name: page_size, schema: { type: integer, minimum: 1, maximum: 200, description: "rows per page (default 50, max 200)" } }
+      responses: { "200": { description: "Forwarder page (data, total, page, page_size)" } }
+
+  /mailboxes/{id}/forwarders:
     post:
       tags: [Mailbox Forwarders]
+      summary: Add a forwarder or an alias to a mailbox
       parameters: [ { in: path, name: id, required: true, schema: { type: string, format: ulid } } ]
       requestBody:
         required: true
@@ -583,10 +575,12 @@ paths:
           application/json:
             schema:
               type: object
-              required: [source, dest]
+              required: [type]
               properties:
-                source: { type: string, example: sales@example.com }
-                dest:   { type: string, example: alice@example.com }
+                type:       { type: string, enum: [alias, external], description: "alias = another address on the mailbox's domain delivers into this mailbox; external = forward this mailbox's mail to another address" }
+                local_part: { type: string, description: "alias only, and required for it: the alias address's local part, e.g. sales" }
+                target:     { type: string, description: "external only, and needed for it: the address to forward to. Omit for an alias" }
+                keep_copy:  { type: boolean, description: "external only: also keep a copy in the mailbox" }
       responses: { "201": { description: Created } }
 
   # ------------------------------------------------------- Applications ---
@@ -1015,26 +1009,32 @@ paths:
       responses: { "200": { description: "File content (base64 when binary)" } }
 
   # ---------------------------------------------------------- Admin: Users ---
+  # Handler: panel-api/internal/api/users.go. Mounted at /users behind
+  # RequireAdmin (there is no /admin/users route).
 
-  /admin/users:
+  /users:
     get:
       tags: [Users]
       summary: List all panel users (admin)
-      responses: { "200": { description: OK } }
+      responses: { "200": { description: "User page (data, total, page, page_size)" } }
     post:
       tags: [Users]
-      summary: Create a tenant user (admin)
+      summary: Create a panel user (admin)
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [email, password]
+              required: [password]
               properties:
-                email:    { type: string, format: email }
-                password: { type: string, format: password, minLength: 12 }
-                is_admin: { type: boolean, default: false }
+                username:   { type: string, description: "login and Linux account name: a lowercase letter or _ first, then up to 31 of a-z 0-9 _ -. Omit to derive it from the email's local part" }
+                email:      { type: string, format: email, description: "optional contact address" }
+                password:   { type: string, format: password, minLength: 12, description: "at least 12 characters (the panel accepts 10; this tool asks for more)" }
+                name_first: { type: string }
+                name_last:  { type: string }
+                is_admin:   { type: boolean, default: false }
+                package_id: { type: string, description: "hosting package ID" }
       responses: { "201": { description: Created } }
 
   # ----------------------------------------------- Admin: Server Settings ---
@@ -1068,13 +1068,24 @@ paths:
 
   # ------------------------------------------------------- Admin: Updates ---
 
-  /admin/updates/run:
+  # Handler: panel-api/internal/api/admin_updates.go.
+
+  /admin/updates/jabali/run:
     post:
       tags: [Updates]
       summary: Trigger `jabali update` (admin)
       description: |
         Spawns a transient systemd unit that runs the update flow
         (download release tarball or build from source, run migrations,
-        restart services). Returns immediately with a job handle.
-      responses: { "202": { description: Job queued — stream logs via WebSocket } }
+        restart services). Returns immediately with the unit name and
+        started_at; poll /admin/updates/jabali/status for progress.
+      responses: { "200": { description: "Started (unit, started_at)" } }
+
+  /admin/updates/jabali/status:
+    get:
+      tags: [Updates]
+      summary: Read the state and log of the `jabali update` run (admin)
+      parameters:
+        - { in: query, name: since, schema: { type: string, description: "RFC 3339 time to read the log from, e.g. the run's started_at (default: 15 minutes ago)" } }
+      responses: { "200": { description: "unit, status (active|inactive|failed|activating), exit_code once finished, log_tail" } }
 
